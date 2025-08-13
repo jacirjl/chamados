@@ -1,0 +1,90 @@
+<!-- Herda a estrutura do layout.html -->
+{% extends "layout.html" %}
+
+<!-- Define o título específico para esta página -->
+{% block title %}Abrir Chamado{% endblock %}
+
+<!-- Define o conteúdo principal da página de chamados -->
+{% block content %}
+<div class="header">
+    <img class="logo-header" src="https://i.imgur.com/YOUR_LOGO_ID.png" alt="Logo do Programa CrIAção">
+    <h1>Abertura de Chamado Técnico</h1>
+    <!-- Link para fazer logout -->
+    <a href="{{ url_for('logout') }}" class="logout-button">Sair</a>
+</div>
+
+<!-- Seção com os dados do usuário (não editáveis) -->
+<div class="user-info">
+    <div class="info-item">
+        <label>Solicitante:</label>
+        <input type="text" value="{{ user.responsavel }}" disabled>
+    </div>
+    <div class="info-item">
+        <label>Telefone:</label>
+        <input type="tel" value="{{ user.telefone }}" disabled>
+    </div>
+    <div class="info-item">
+        <label>E-mail:</label>
+        <input type="email" value="{{ user.email }}" disabled>
+    </div>
+    <div class="info-item">
+        <label>Município:</label>
+        <input type="text" value="{{ user.municipio }}" disabled>
+    </div>
+</div>
+
+<!-- Formulário para registrar o chamado -->
+<form method="post" action="{{ url_for('submit_chamado') }}">
+    <h2>Smartphones</h2>
+    <h3>Selecione o dispositivo que necessita do suporte</h3>
+    <div id="imeiTableContainer">
+        <!-- Verifica se existem smartphones para listar -->
+        {% if smartphones %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Selecionar</th>
+                        <th>IMEI</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Loop para criar uma linha para cada smartphone -->
+                    {% for s in smartphones %}
+                    <tr>
+                        <td><input type="radio" name="selectedDevice" value="{{ s.imei }}" required></td>
+                        <td>{{ s.imei }}</td>
+                        <td>{{ s.marca }}</td>
+                        <td>{{ s.modelo }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nenhum dispositivo disponível encontrado para este município.</p>
+        {% endif %}
+    </div>
+
+    <hr>
+    <h2>Informações do Chamado</h2>
+
+    <div class="form-group">
+        <label for="tipoProblema">Tipo de Chamado/Problema:</label>
+        <select id="tipoProblema" name="tipoProblema" required>
+            <option value="">-- Selecione uma Categoria --</option>
+            <option value="Octostudio">Octostudio</option>
+            <option value="Sistema Operacional">Sistema Operacional</option>
+            <option value="Hardware/Dispositivo">Hardware/Dispositivo</option>
+            <option value="Duvidas/Outros">Dúvidas/Outros</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="observacoes">Detalhamento do problema/solicitação:</label>
+        <textarea id="observacoes" name="observacoes" rows="5" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
+    </div>
+
+    <button type="submit">Registrar Chamado</button>
+</form>
+{% endblock %}
