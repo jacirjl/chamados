@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- O título da página será definido em cada template específico -->
+    <title>{% block title %}{% endblock %} - Sistema de Chamados</title>
+    <!-- Link para a folha de estilos CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Bloco para exibir mensagens flash (alertas) para o usuário -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Bloco de conteúdo principal que será substituído por cada página -->
+        {% block content %}
+        {% endblock %}
+    </div>
+</body>
+</html>
