@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Usuário</title>
+    <!-- Reutilizando o mesmo estilo da página de admin -->
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 1em; margin-bottom: 1em; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        .submit-btn { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; }
+        .cancel-link { display: inline-block; margin-top: 1em; text-decoration: none; color: #6c757d; }
+        .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; }
+        .flash.danger { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Editar Usuário: {{ user.responsavel }}</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- O formulário envia os dados para a mesma rota, mas com o método POST -->
+        <form method="post">
+            <div class="form-grid">
+                <div>
+                    <label for="responsavel">Responsável</label>
+                    <input type="text" id="responsavel" name="responsavel" value="{{ user.responsavel }}" required>
+                </div>
+                <div>
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" value="{{ user.email }}" required>
+                </div>
+                <div>
+                    <label for="municipio">Município</label>
+                    <input type="text" id="municipio" name="municipio" value="{{ user.municipio }}" required>
+                </div>
+                <div>
+                    <label for="telefone">Telefone</label>
+                    <input type="text" id="telefone" name="telefone" value="{{ user.telefone }}" required>
+                </div>
+            </div>
+            <button type="submit" class="submit-btn">Salvar Alterações</button>
+        </form>
+        <a href="{{ url_for('admin_index') }}" class="cancel-link">Cancelar e Voltar</a>
+    </div>
+</body>
+</html>

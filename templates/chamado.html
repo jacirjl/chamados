@@ -1,19 +1,11 @@
-<!-- Herda a estrutura do layout.html -->
 {% extends "layout.html" %}
 
-<!-- Define o título específico para esta página -->
 {% block title %}Abrir Chamado{% endblock %}
 
-<!-- Define o conteúdo principal da página de chamados -->
 {% block content %}
-<div class="header">
-    <img class="logo-header" src="https://i.imgur.com/YOUR_LOGO_ID.png" alt="Logo do Programa CrIAção">
-    <h1>Abertura de Chamado Técnico</h1>
-    <!-- Link para fazer logout -->
-    <a href="{{ url_for('logout') }}" class="logout-button">Sair</a>
-</div>
+<h1>Abertura de Chamado Técnico</h1>
 
-<!-- Seção com os dados do usuário (não editáveis) -->
+<!-- Seção com os dados do usuário -->
 <div class="user-info">
     <div class="info-item">
         <label>Solicitante:</label>
@@ -38,7 +30,6 @@
     <h2>Smartphones</h2>
     <h3>Selecione o dispositivo que necessita do suporte</h3>
     <div id="imeiTableContainer">
-        <!-- Verifica se existem smartphones para listar -->
         {% if smartphones %}
             <table>
                 <thead>
@@ -50,7 +41,6 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Loop para criar uma linha para cada smartphone -->
                     {% for s in smartphones %}
                     <tr>
                         <td><input type="radio" name="selectedDevice" value="{{ s.imei }}" required></td>
@@ -68,7 +58,6 @@
 
     <hr>
     <h2>Informações do Chamado</h2>
-
     <div class="form-group">
         <label for="tipoProblema">Tipo de Chamado/Problema:</label>
         <select id="tipoProblema" name="tipoProblema" required>
@@ -79,12 +68,37 @@
             <option value="Duvidas/Outros">Dúvidas/Outros</option>
         </select>
     </div>
-
     <div class="form-group">
         <label for="observacoes">Detalhamento do problema/solicitação:</label>
         <textarea id="observacoes" name="observacoes" rows="5" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
     </div>
-
     <button type="submit">Registrar Chamado</button>
 </form>
+
+<!-- Seção para exibir chamados recentes -->
+{% if chamados %}
+<hr>
+<h2>Últimos Chamados Registrados</h2>
+<div id="imeiTableContainer">
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Tipo de Problema</th>
+                <th>IMEI</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for chamado in chamados %}
+            <tr>
+                <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
+                <td>{{ chamado.tipo_problema }}</td>
+                <td>{{ chamado.smartphone_imei }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% endblock %}

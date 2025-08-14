@@ -1,7 +1,8 @@
-# app.py - Versão com lógica de redefinição de senha corrigida
+# app.py - Versão com painel de admin integrado e acesso simplificado
 
 import os
 import sqlite3
+from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -9,7 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = 'sua-chave-secreta-super-aleatoria'
 DATABASE = os.path.join(app.instance_path, 'chamados.db')
-DEFAULT_PASSWORD = '12345'  # Senha padrão para verificação
+DEFAULT_PASSWORD = '12345'
 
 os.makedirs(app.instance_path, exist_ok=True)
 
@@ -21,6 +22,38 @@ def get_db():
     return db
 
 
+# --- MELHORIA: Processador de Contexto ---
+@app.context_processor
+def inject_user_and_request():
+    user = None
+    if 'user_id' in session:
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        db.close()
+    return dict(user=user, request=request)
+
+
+# --- Decorador de Segurança Aprimorado ---
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Por favor, faça login para acessar esta página.', 'warning')
+            return redirect(url_for('login'))
+
+        db = get_db()
+        user = db.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        db.close()
+
+        if user is None or not user['is_admin']:
+            flash('Acesso negado. Esta área é restrita para administradores.', 'danger')
+            return redirect(url_for('index'))
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 # --- Rotas da Aplicação Principal ---
 
 @app.route('/')
@@ -30,23 +63,17 @@ def index():
 
     db = get_db()
     user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-
-    # CORREÇÃO: Verificação explícita se o valor é 1 (True)
     if user and user['must_reset_password'] == 1:
         flash('Por favor, redefina sua senha para continuar.', 'warning')
         return redirect(url_for('redefinir_senha'))
 
-    smartphones = db.execute(
-        'SELECT * FROM smartphones WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-        (user['municipio'], 'Perdido', 'Roubado', 'Danificado')
-    ).fetchall()
-    recentes_chamados = db.execute(
-        'SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC LIMIT 5',
-        (user['email'],)
-    ).fetchall()
+    smartphones = db.execute('SELECT * FROM smartphones WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+                             (user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
+    recentes_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC LIMIT 5',
+                                   (user['email'],)).fetchall()
     db.close()
 
-    return render_template('chamado.html', user=user, smartphones=smartphones, chamados=recentes_chamados)
+    return render_template('chamado.html', smartphones=smartphones, chamados=recentes_chamados)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -57,69 +84,48 @@ def login():
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         db.close()
-
         if user:
-            is_password_correct = False
-            # Se a senha for a padrão, compara como texto simples
-            if user['password'] == DEFAULT_PASSWORD and password == DEFAULT_PASSWORD:
-                is_password_correct = True
-            # Se não for a padrão, significa que já foi criptografada
-            elif user['password'] != DEFAULT_PASSWORD:
-                is_password_correct = check_password_hash(user['password'], password)
-
+            is_password_correct = (user['password'] == DEFAULT_PASSWORD and password == DEFAULT_PASSWORD) or \
+                                  (user['password'] != DEFAULT_PASSWORD and check_password_hash(user['password'],
+                                                                                                password))
             if is_password_correct:
                 session['user_id'] = user['id']
-
-                # CORREÇÃO: Verificação explícita se o valor é 1 (True)
                 if user['must_reset_password'] == 1:
                     flash('Este é seu primeiro acesso. Por favor, crie uma nova senha.', 'info')
                     return redirect(url_for('redefinir_senha'))
-
                 return redirect(url_for('index'))
-
         flash('E-mail ou senha inválidos.', 'danger')
     return render_template('login.html')
 
 
-# --- ROTA PARA REDEFINIR SENHA ---
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Você foi desconectado.', 'info')
+    return redirect(url_for('login'))
+
+
 @app.route('/redefinir_senha', methods=['GET', 'POST'])
 def redefinir_senha():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
+    if 'user_id' not in session: return redirect(url_for('login'))
     if request.method == 'POST':
         new_password = request.form['new_password']
         confirm_password = request.form['confirm_password']
-
         if not new_password or len(new_password) < 8:
             flash('A nova senha deve ter no mínimo 8 caracteres.', 'danger')
             return redirect(url_for('redefinir_senha'))
-
         if new_password != confirm_password:
             flash('As senhas não coincidem.', 'danger')
             return redirect(url_for('redefinir_senha'))
-
         hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
-
         db = get_db()
-        db.execute(
-            'UPDATE users SET password = ?, must_reset_password = 0 WHERE id = ?',
-            (hashed_password, session['user_id'])
-        )
+        db.execute('UPDATE users SET password = ?, must_reset_password = 0 WHERE id = ?',
+                   (hashed_password, session['user_id']))
         db.commit()
         db.close()
-
-        flash('Senha redefinida com sucesso! Você já pode usar o sistema.', 'success')
+        flash('Senha redefinida com sucesso!', 'success')
         return redirect(url_for('index'))
-
     return render_template('redefinir_senha.html')
-
-
-# (As outras rotas como logout, submit_chamado, meus_chamados permanecem as mesmas)
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    return redirect(url_for('login'))
 
 
 @app.route('/submit_chamado', methods=['POST'])
@@ -147,11 +153,98 @@ def submit_chamado():
 def meus_chamados():
     if 'user_id' not in session: return redirect(url_for('login'))
     db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user_data = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     todos_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC',
-                                (user['email'],)).fetchall()
+                                (user_data['email'],)).fetchall()
     db.close()
-    return render_template('meus_chamados.html', user=user, chamados=todos_chamados)
+    return render_template('meus_chamados.html', chamados=todos_chamados)
+
+
+# --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+
+@app.route('/admin/')
+@admin_required
+def admin_index():
+    db = get_db()
+    users = db.execute('SELECT id, email, municipio, responsavel, telefone FROM users ORDER BY responsavel').fetchall()
+    db.close()
+    return render_template('admin.html', users=users)
+
+
+@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    db = get_db()
+    if request.method == 'POST':
+        email = request.form['email']
+        municipio = request.form['municipio']
+        responsavel = request.form['responsavel']
+        telefone = request.form['telefone']
+        if not all([email, municipio, responsavel, telefone]):
+            flash('Todos os campos são obrigatórios.', 'danger')
+        else:
+            try:
+                db.execute('UPDATE users SET email = ?, municipio = ?, responsavel = ?, telefone = ? WHERE id = ?',
+                           (email, municipio, responsavel, telefone, user_id))
+                db.commit()
+                flash('Usuário atualizado com sucesso!', 'success')
+                return redirect(url_for('admin_index'))
+            except sqlite3.IntegrityError:
+                flash(f'O e-mail {email} já está em uso.', 'danger')
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    else:
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if user is None:
+            flash('Usuário não encontrado.', 'danger')
+            return redirect(url_for('admin_index'))
+    db.close()
+    return render_template('edit_user.html', user=user)
+
+
+@app.route('/admin/add_user', methods=['POST'])
+@admin_required
+def add_user():
+    email = request.form['email']
+    municipio = request.form['municipio']
+    responsavel = request.form['responsavel']
+    telefone = request.form['telefone']
+    if not all([email, municipio, responsavel, telefone]):
+        flash('Todos os campos são obrigatórios.', 'danger')
+        return redirect(url_for('admin_index'))
+    db = get_db()
+    try:
+        db.execute(
+            'INSERT INTO users (email, password, municipio, responsavel, telefone, must_reset_password) VALUES (?, ?, ?, ?, ?, ?)',
+            (email, DEFAULT_PASSWORD, municipio, responsavel, telefone, 1))
+        db.commit()
+        flash(f'Usuário {email} adicionado com sucesso!', 'success')
+    except sqlite3.IntegrityError:
+        flash(f'O e-mail {email} já está cadastrado.', 'danger')
+    finally:
+        db.close()
+    return redirect(url_for('admin_index'))
+
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    db = get_db()
+    db.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    db.commit()
+    db.close()
+    flash('Usuário removido com sucesso.', 'success')
+    return redirect(url_for('admin_index'))
+
+
+@app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
+@admin_required
+def reset_password(user_id):
+    db = get_db()
+    db.execute('UPDATE users SET password = ?, must_reset_password = 1 WHERE id = ?', (DEFAULT_PASSWORD, user_id))
+    db.commit()
+    db.close()
+    flash('Senha do usuário redefinida para o padrão com sucesso!', 'success')
+    return redirect(url_for('admin_index'))
 
 
 if __name__ == '__main__':

@@ -3,27 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- O título da página será definido em cada template específico -->
     <title>{% block title %}{% endblock %} - Sistema de Chamados</title>
-    <!-- Link para a folha de estilos CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <!-- Bloco para exibir mensagens flash (alertas) para o usuário -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="flash-messages">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
+    <div class="page-wrapper">
+        <!-- Barra Lateral de Navegação -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img class="sidebar-logo" src="https://i.imgur.com/YOUR_LOGO_ID.png" alt="Logo">
+                <h1 class="sidebar-title">CrIAção</h1>
+            </div>
 
-        <!-- Bloco de conteúdo principal que será substituído por cada página -->
-        {% block content %}
-        {% endblock %}
+            <!-- O 'user' aqui vem do context_processor -->
+            {% if user %}
+            <ul class="sidebar-nav">
+                <!-- Os links agora verificam a rota ativa para destacar -->
+                <li><a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Abrir Chamado</a></li>
+                <li><a href="{{ url_for('meus_chamados') }}" class="{{ 'active' if request.endpoint == 'meus_chamados' else '' }}">Meus Chamados</a></li>
+
+                <!-- Link de Admin condicional -->
+                {% if user.is_admin == 1 %}
+                    <li><a href="{{ url_for('admin_index') }}" class="admin-button {{ 'active' if 'admin' in request.endpoint else '' }}">Painel Admin</a></li>
+                {% endif %}
+            </ul>
+
+            <div class="sidebar-footer">
+                <a href="{{ url_for('logout') }}" class="logout-button">Sair</a>
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Conteúdo Principal da Página -->
+        <main class="main-content">
+            <div class="container">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </main>
     </div>
 </body>
 </html>

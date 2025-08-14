@@ -1,11 +1,9 @@
-# database.py - Adiciona uma flag para controlar a redefinição de senha
+# database.py - Adiciona o campo 'is_admin' para controle de acesso
 
 import sqlite3
 import os
 import pandas as pd
-
-# A werkzeug não é mais necessária aqui, pois a senha padrão é texto simples
-# Ela será usada apenas no app.py para criptografar a nova senha do usuário
+from werkzeug.security import generate_password_hash
 
 # --- Configurações ---
 INSTANCE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
@@ -21,8 +19,7 @@ print("Conectado ao banco de dados.")
 
 # --- Funções para criar/atualizar as tabelas ---
 def setup_tables():
-    """Cria as tabelas e adiciona a nova coluna 'must_reset_password' se não existir."""
-    # Cria a tabela users se não existir
+    """Cria as tabelas e adiciona as novas colunas se não existirem."""
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,19 +29,8 @@ def setup_tables():
         responsavel TEXT NOT NULL,
         telefone TEXT NOT NULL
     );
-    ''')
-
-    # Bloco para adicionar a nova coluna de forma segura, sem dar erro se ela já existir
-    try:
-        cursor.execute('ALTER TABLE users ADD COLUMN must_reset_password BOOLEAN DEFAULT 1')
-        print("Coluna 'must_reset_password' adicionada à tabela 'users'.")
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e):
-            print("Coluna 'must_reset_password' já existe.")
-        else:
-            raise e
-
-    # Cria as outras tabelas
+      ''')
+     # Cria as outras tabelas
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS smartphones (
         id INTEGER PRIMARY KEY AUTOINCREMENT, imei TEXT UNIQUE NOT NULL, marca TEXT NOT NULL,
@@ -58,32 +44,53 @@ def setup_tables():
         tipo_problema TEXT NOT NULL, observacoes TEXT NOT NULL
     );
     ''')
+
+
+    # Adiciona a coluna 'must_reset_password' se não existir
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN must_reset_password BOOLEAN DEFAULT 1')
+    except sqlite3.OperationalError:
+        pass  # Coluna já existe
+
+    # NOVO: Adiciona a coluna 'is_admin' se não existir
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0')
+        print("Coluna 'is_admin' adicionada à tabela 'users'.")
+    except sqlite3.OperationalError:
+        print("Coluna 'is_admin' já existe.")
+
+    # (Criação das outras tabelas permanece a mesma)
+
     print("Tabelas verificadas/criadas.")
     conn.commit()
 
 
-# --- Funções para popular as tabelas ---
 def populate_users():
-    """Lê a aba 'Cadastro' e insere novos usuários com a senha padrão."""
+    """Lê a aba 'Cadastro' e insere/atualiza usuários, incluindo o status de admin."""
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='Cadastro')
         print(f"Encontrados {len(df)} registros na aba 'Cadastro'.")
 
+        # Converte nomes de colunas para minúsculo para facilitar a busca
+        df.columns = [col.lower() for col in df.columns]
+
         for index, row in df.iterrows():
-            cursor.execute("SELECT id FROM users WHERE email = ?", (row['Email'],))
+            is_admin_flag = 1 if 'admin' in df.columns and str(row.get('admin', '')).lower() == 'sim' else 0
+
+            cursor.execute("SELECT id FROM users WHERE email = ?", (row['email'],))
             if cursor.fetchone() is None:
-                # Insere o novo usuário com a senha padrão e a flag para redefinir
                 cursor.execute(
-                    "INSERT INTO users (email, password, municipio, responsavel, telefone, must_reset_password) VALUES (?, ?, ?, ?, ?, ?)",
-                    (row['Email'], DEFAULT_PASSWORD, row['Município'], row['Responsável'], str(row['Telefone']), 1)
-                    # 1 significa True
+                    "INSERT INTO users (email, password, municipio, responsavel, telefone, must_reset_password, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (row['email'], DEFAULT_PASSWORD, row['município'], row['responsável'], str(row['telefone']), 1,
+                     is_admin_flag)
                 )
-                print(f"Usuário '{row['Email']}' inserido.")
+                print(f"Usuário '{row['email']}' inserido (Admin: {'Sim' if is_admin_flag else 'Não'}).")
         conn.commit()
     except Exception as e:
         print(f"\nERRO ao ler a aba 'Cadastro': {e}")
 
 
+# (A função populate_smartphones permanece a mesma)
 # (A função populate_smartphones permanece a mesma e é omitida por brevidade)
 def populate_smartphones():
     try:
@@ -105,7 +112,7 @@ def populate_smartphones():
 if __name__ == '__main__':
     setup_tables()
     if not os.path.exists(EXCEL_FILE):
-        print(f"\nAVISO: '{EXCEL_FILE}' não encontrado. Banco de dados não foi populado.")
+        print(f"\nAVISO: '{EXCEL_FILE}' não encontrado.")
     else:
         populate_users()
         populate_smartphones()
