@@ -1,0 +1,51 @@
+<!-- Herda a estrutura do layout.html para manter a consistência -->
+{% extends "layout.html" %}
+
+<!-- Define o título específico para esta página -->
+{% block title %}Meus Chamados{% endblock %}
+
+<!-- Define o conteúdo principal da página -->
+{% block content %}
+<div class="header">
+    <img class="logo-header" src="https://i.imgur.com/YOUR_LOGO_ID.png" alt="Logo do Programa CrIAção">
+    <h1>Meus Chamados Registrados</h1>
+</div>
+
+<div class="chamados-container">
+    <!-- Verifica se a lista de chamados não está vazia -->
+    {% if chamados %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Município</th>
+                    <th>Tipo de Problema</th>
+                    <th>IMEI do Smartphone</th>
+                    <th>Observações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Loop para criar uma linha para cada chamado -->
+                {% for chamado in chamados %}
+                <tr>
+                    <!-- Formata a data para um formato mais legível -->
+                    <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
+                    <td>{{ chamado.municipio }}</td>
+                    <td>{{ chamado.tipo_problema }}</td>
+                    <td>{{ chamado.smartphone_imei }}</td>
+                    <td>{{ chamado.observacoes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <!-- Mensagem exibida se o usuário ainda não abriu nenhum chamado -->
+        <p style="text-align: center; margin-top: 2em;">Você ainda não registrou nenhum chamado.</p>
+    {% endif %}
+</div>
+
+<!-- Link para voltar à página principal -->
+<div style="text-align: center; margin-top: 2em;">
+    <a href="{{ url_for('index') }}" class="back-button">Abrir um Novo Chamado</a>
+</div>
+{% endblock %}

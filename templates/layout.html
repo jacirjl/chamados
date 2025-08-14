@@ -3,14 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- O título da página será definido em cada template específico -->
     <title>{% block title %}{% endblock %} - Sistema de Chamados</title>
-    <!-- Link para a folha de estilos CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <nav class="main-nav">
+        <div class="nav-content">
+            <span class="nav-brand">Programa CrIAção</span>
+            <div class="nav-links">
+                {% if session.user_id %}
+                    <a href="{{ url_for('index') }}">Abrir Chamado</a>
+                    <a href="{{ url_for('meus_chamados') }}">Meus Chamados</a>
+
+                    <!-- NOVO: Botão de Admin condicional -->
+                    {% if user and user.is_admin == 1 %}
+                        <a href="{{ url_for('admin_index') }}" class="admin-button">Painel Admin</a>
+                    {% endif %}
+
+                    <a href="{{ url_for('logout') }}" class="logout-button">Sair</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
-        <!-- Bloco para exibir mensagens flash (alertas) para o usuário -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div class="flash-messages">
@@ -21,9 +37,7 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Bloco de conteúdo principal que será substituído por cada página -->
-        {% block content %}
-        {% endblock %}
+        {% block content %}{% endblock %}
     </div>
 </body>
 </html>
