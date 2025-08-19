@@ -22,7 +22,18 @@ def get_db():
     return db
 
 
-# --- DECORADOR DE SEGURANÇA APRIMORADO ---
+# --- MELHORIA: Processador de Contexto ---
+@app.context_processor
+def inject_user_and_request():
+    user = None
+    if 'user_id' in session:
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        db.close()
+    return dict(user=user, request=request)
+
+
+# --- Decorador de Segurança Aprimorado ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -43,7 +54,7 @@ def admin_required(f):
     return decorated_function
 
 
-# --- Rotas da Aplicação Principal (Usuários) ---
+# --- Rotas da Aplicação Principal ---
 
 @app.route('/')
 def index():
@@ -62,7 +73,7 @@ def index():
                                    (user['email'],)).fetchall()
     db.close()
 
-    return render_template('chamado.html', user=user, smartphones=smartphones, chamados=recentes_chamados)
+    return render_template('chamado.html', smartphones=smartphones, chamados=recentes_chamados)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -142,36 +153,14 @@ def submit_chamado():
 def meus_chamados():
     if 'user_id' not in session: return redirect(url_for('login'))
     db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user_data = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     todos_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC',
-                                (user['email'],)).fetchall()
+                                (user_data['email'],)).fetchall()
     db.close()
-    return render_template('meus_chamados.html', user=user, chamados=todos_chamados)
+    return render_template('meus_chamados.html', chamados=todos_chamados)
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-
-@app.route('/admin/login', methods=['GET', 'POST'])
-def admin_login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        db = get_db()
-        user = db.execute('SELECT * FROM users WHERE email = ? AND is_admin = 1', (email,)).fetchone()
-        db.close()
-        is_password_correct = False
-        if user:
-            is_password_correct = (user['password'] == DEFAULT_PASSWORD and password == DEFAULT_PASSWORD) or \
-                                  (user['password'] != DEFAULT_PASSWORD and check_password_hash(user['password'],
-                                                                                                password))
-        if is_password_correct:
-            session['admin_id'] = user['id']
-            session['admin_email'] = user['email']
-            return redirect(url_for('admin_index'))
-        else:
-            flash('Credenciais de administrador inválidas ou usuário não é admin.', 'danger')
-    return render_template('admin_login.html')
-
 
 @app.route('/admin/')
 @admin_required
@@ -180,6 +169,36 @@ def admin_index():
     users = db.execute('SELECT id, email, municipio, responsavel, telefone FROM users ORDER BY responsavel').fetchall()
     db.close()
     return render_template('admin.html', users=users)
+
+
+@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    db = get_db()
+    if request.method == 'POST':
+        email = request.form['email']
+        municipio = request.form['municipio']
+        responsavel = request.form['responsavel']
+        telefone = request.form['telefone']
+        if not all([email, municipio, responsavel, telefone]):
+            flash('Todos os campos são obrigatórios.', 'danger')
+        else:
+            try:
+                db.execute('UPDATE users SET email = ?, municipio = ?, responsavel = ?, telefone = ? WHERE id = ?',
+                           (email, municipio, responsavel, telefone, user_id))
+                db.commit()
+                flash('Usuário atualizado com sucesso!', 'success')
+                return redirect(url_for('admin_index'))
+            except sqlite3.IntegrityError:
+                flash(f'O e-mail {email} já está em uso.', 'danger')
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    else:
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if user is None:
+            flash('Usuário não encontrado.', 'danger')
+            return redirect(url_for('admin_index'))
+    db.close()
+    return render_template('edit_user.html', user=user)
 
 
 @app.route('/admin/add_user', methods=['POST'])
