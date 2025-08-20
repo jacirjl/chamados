@@ -1,18 +1,24 @@
-# app.py - Versão com painel de admin integrado e acesso simplificado
+# app.py
 
 import os
 import sqlite3
+from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 # --- Configuração da Aplicação ---
 app = Flask(__name__)
 app.secret_key = 'sua-chave-secreta-super-aleatoria'
+app.instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+
 DATABASE = os.path.join(app.instance_path, 'chamados.db')
+UPLOAD_FOLDER = os.path.join(app.instance_path, 'uploads')
 DEFAULT_PASSWORD = '12345'
 
 os.makedirs(app.instance_path, exist_ok=True)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # --- Funções de Banco de Dados ---
@@ -22,58 +28,66 @@ def get_db():
     return db
 
 
-# --- MELHORIA: Processador de Contexto ---
-@app.context_processor
-def inject_user_and_request():
-    user = None
-    if 'user_id' in session:
-        db = get_db()
-        user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-        db.close()
-    return dict(user=user, request=request)
-
-
-# --- Decorador de Segurança Aprimorado ---
-def admin_required(f):
+# --- Decoradores de Segurança ---
+def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             flash('Por favor, faça login para acessar esta página.', 'warning')
             return redirect(url_for('login'))
-
-        db = get_db()
-        user = db.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-        db.close()
-
-        if user is None or not user['is_admin']:
-            flash('Acesso negado. Esta área é restrita para administradores.', 'danger')
-            return redirect(url_for('index'))
-
         return f(*args, **kwargs)
 
     return decorated_function
 
 
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user or not g.user['is_admin']:
+            flash('Acesso negado. Esta área é restrita para administradores.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# --- Processador de Contexto ---
+@app.before_request
+def load_logged_in_user():
+    user_id = session.get('user_id')
+    if user_id is None:
+        g.user = None
+    else:
+        db = get_db()
+        g.user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        db.close()
+
+
+@app.context_processor
+def inject_user():
+    return dict(user=g.user)
+
+
 # --- Rotas da Aplicação Principal ---
-
 @app.route('/')
+@login_required
 def index():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-    if user and user['must_reset_password'] == 1:
+    if g.user['must_reset_password'] == 1:
         flash('Por favor, redefina sua senha para continuar.', 'warning')
         return redirect(url_for('redefinir_senha'))
 
-    smartphones = db.execute('SELECT * FROM smartphones WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-                             (user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
-    recentes_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC LIMIT 5',
-                                   (user['email'],)).fetchall()
+    db = get_db()
+    equipamentos = db.execute(
+        'SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+        (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')
+    ).fetchall()
+    recentes_chamados = db.execute(
+        'SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC LIMIT 5',
+        (g.user['email'],)
+    ).fetchall()
     db.close()
 
-    return render_template('chamado.html', smartphones=smartphones, chamados=recentes_chamados)
+    return render_template('chamado.html', equipamentos=equipamentos, chamados=recentes_chamados)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -84,17 +98,24 @@ def login():
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         db.close()
+
+        is_password_correct = False
         if user:
             is_password_correct = (user['password'] == DEFAULT_PASSWORD and password == DEFAULT_PASSWORD) or \
-                                  (user['password'] != DEFAULT_PASSWORD and check_password_hash(user['password'],
-                                                                                                password))
-            if is_password_correct:
-                session['user_id'] = user['id']
-                if user['must_reset_password'] == 1:
-                    flash('Este é seu primeiro acesso. Por favor, crie uma nova senha.', 'info')
-                    return redirect(url_for('redefinir_senha'))
-                return redirect(url_for('index'))
+                                  (check_password_hash(user['password'], password))
+
+        if is_password_correct:
+            session.clear()
+            session['user_id'] = user['id']
+
+            if user['must_reset_password'] == 1:
+                flash('Este é seu primeiro acesso ou sua senha foi redefinida. Por favor, crie uma nova senha.', 'info')
+                return redirect(url_for('redefinir_senha'))
+
+            return redirect(url_for('index'))
+
         flash('E-mail ou senha inválidos.', 'danger')
+
     return render_template('login.html')
 
 
@@ -106,137 +127,162 @@ def logout():
 
 
 @app.route('/redefinir_senha', methods=['GET', 'POST'])
+@login_required
 def redefinir_senha():
-    if 'user_id' not in session: return redirect(url_for('login'))
     if request.method == 'POST':
         new_password = request.form['new_password']
         confirm_password = request.form['confirm_password']
-        if not new_password or len(new_password) < 8:
-            flash('A nova senha deve ter no mínimo 8 caracteres.', 'danger')
-            return redirect(url_for('redefinir_senha'))
-        if new_password != confirm_password:
+        if not new_password or len(new_password) < 4:
+            flash('A nova senha deve ter no mínimo 4 caracteres.', 'danger')
+        elif new_password != confirm_password:
             flash('As senhas não coincidem.', 'danger')
-            return redirect(url_for('redefinir_senha'))
-        hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
-        db = get_db()
-        db.execute('UPDATE users SET password = ?, must_reset_password = 0 WHERE id = ?',
-                   (hashed_password, session['user_id']))
-        db.commit()
-        db.close()
-        flash('Senha redefinida com sucesso!', 'success')
-        return redirect(url_for('index'))
+        else:
+            hashed_password = generate_password_hash(new_password)
+            db = get_db()
+            db.execute('UPDATE users SET password = ?, must_reset_password = 0 WHERE id = ?',
+                       (hashed_password, session['user_id']))
+            db.commit()
+            db.close()
+            flash('Senha redefinida com sucesso!', 'success')
+            return redirect(url_for('index'))
     return render_template('redefinir_senha.html')
 
 
 @app.route('/submit_chamado', methods=['POST'])
+@login_required
 def submit_chamado():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    user_id = session['user_id']
     imei = request.form.get('selectedDevice')
     tipo_problema = request.form.get('tipoProblema')
     observacoes = request.form.get('observacoes')
+
     if not all([imei, tipo_problema, observacoes]):
         flash('Todos os campos do chamado são obrigatórios.', 'danger')
         return redirect(url_for('index'))
+
+    foto_filename = None
+    if 'foto' in request.files:
+        foto_file = request.files['foto']
+        if foto_file.filename != '':
+            _, extensao = os.path.splitext(foto_file.filename)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+            foto_filename = f"{timestamp}{extensao}"
+            foto_file.save(os.path.join(UPLOAD_FOLDER, foto_filename))
+
     db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     db.execute(
-        'INSERT INTO chamados (solicitante_email, municipio, smartphone_imei, tipo_problema, observacoes) VALUES (?, ?, ?, ?, ?)',
-        (user['email'], user['municipio'], imei, tipo_problema, observacoes))
+        'INSERT INTO chamados (solicitante_email, municipio, smartphone_imei, tipo_problema, observacoes, status, foto) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (g.user['email'], g.user['municipio'], imei, tipo_problema, observacoes, 'Aberto', foto_filename)
+    )
     db.commit()
     db.close()
+
     flash('Chamado registrado com sucesso!', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('meus_chamados'))
 
 
 @app.route('/meus_chamados')
+@login_required
 def meus_chamados():
-    if 'user_id' not in session: return redirect(url_for('login'))
     db = get_db()
-    user_data = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-    todos_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC',
-                                (user_data['email'],)).fetchall()
+    status_options = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
+
+    if g.user['is_admin']:
+        todos_chamados = db.execute('SELECT * FROM chamados ORDER BY timestamp DESC').fetchall()
+    else:
+        todos_chamados = db.execute(
+            'SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC',
+            (g.user['email'],)
+        ).fetchall()
+
     db.close()
-    return render_template('meus_chamados.html', chamados=todos_chamados)
+    return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options)
+
+
+@app.route('/uploads/<path:filename>')
+@login_required
+def display_image(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+
+@app.route('/chamado/update/<int:chamado_id>', methods=['POST'])
+@login_required
+def update_chamado(chamado_id):
+    novo_status = request.form.get('status')
+    nova_solucao = request.form.get('solucao')
+    db = get_db()
+    db.execute(
+        'UPDATE chamados SET status = ?, solucao = ? WHERE id = ?',
+        (novo_status, nova_solucao, chamado_id)
+    )
+    db.commit()
+    db.close()
+    flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')
+    return redirect(url_for('meus_chamados'))
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-
 @app.route('/admin/')
+@login_required
 @admin_required
 def admin_index():
+    search_query = request.args.get('search', '')
     db = get_db()
-    users = db.execute('SELECT id, email, municipio, responsavel, telefone FROM users ORDER BY responsavel').fetchall()
-    db.close()
-    return render_template('admin.html', users=users)
 
-
-@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
-@admin_required
-def edit_user(user_id):
-    db = get_db()
-    if request.method == 'POST':
-        email = request.form['email']
-        municipio = request.form['municipio']
-        responsavel = request.form['responsavel']
-        telefone = request.form['telefone']
-        if not all([email, municipio, responsavel, telefone]):
-            flash('Todos os campos são obrigatórios.', 'danger')
-        else:
-            try:
-                db.execute('UPDATE users SET email = ?, municipio = ?, responsavel = ?, telefone = ? WHERE id = ?',
-                           (email, municipio, responsavel, telefone, user_id))
-                db.commit()
-                flash('Usuário atualizado com sucesso!', 'success')
-                return redirect(url_for('admin_index'))
-            except sqlite3.IntegrityError:
-                flash(f'O e-mail {email} já está em uso.', 'danger')
-        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if search_query:
+        search_term = f"%{search_query}%"
+        users = db.execute(
+            'SELECT * FROM users WHERE responsavel LIKE ? OR email LIKE ? OR municipio LIKE ? ORDER BY responsavel',
+            (search_term, search_term, search_term)
+        ).fetchall()
     else:
-        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-        if user is None:
-            flash('Usuário não encontrado.', 'danger')
-            return redirect(url_for('admin_index'))
+        users = db.execute('SELECT * FROM users ORDER BY responsavel').fetchall()
+
     db.close()
-    return render_template('edit_user.html', user=user)
+    return render_template('admin.html', users=users, search_query=search_query)
 
 
 @app.route('/admin/add_user', methods=['POST'])
+@login_required
 @admin_required
 def add_user():
     email = request.form['email']
     municipio = request.form['municipio']
     responsavel = request.form['responsavel']
     telefone = request.form['telefone']
+    is_admin_val = 1 if request.form.get('is_admin') else 0
+    must_reset_val = 1 if request.form.get('must_reset_password') else 0
+
     if not all([email, municipio, responsavel, telefone]):
-        flash('Todos os campos são obrigatórios.', 'danger')
-        return redirect(url_for('admin_index'))
-    db = get_db()
-    try:
-        db.execute(
-            'INSERT INTO users (email, password, municipio, responsavel, telefone, must_reset_password) VALUES (?, ?, ?, ?, ?, ?)',
-            (email, DEFAULT_PASSWORD, municipio, responsavel, telefone, 1))
-        db.commit()
-        flash(f'Usuário {email} adicionado com sucesso!', 'success')
-    except sqlite3.IntegrityError:
-        flash(f'O e-mail {email} já está cadastrado.', 'danger')
-    finally:
-        db.close()
+        flash('Os campos de texto são obrigatórios.', 'danger')
+    else:
+        db = get_db()
+        try:
+            db.execute(
+                'INSERT INTO users (email, password, municipio, responsavel, telefone, must_reset_password, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (email, DEFAULT_PASSWORD, municipio, responsavel, telefone, must_reset_val, is_admin_val))
+            db.commit()
+            flash(f'Usuário {email} adicionado com sucesso!', 'success')
+        except sqlite3.IntegrityError:
+            flash(f'O e-mail {email} já está cadastrado.', 'danger')
+        finally:
+            db.close()
     return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@login_required
 @admin_required
 def delete_user(user_id):
     db = get_db()
     db.execute('DELETE FROM users WHERE id = ?', (user_id,))
     db.commit()
     db.close()
-    flash('Usuário removido com sucesso.', 'success')
+    flash('Usuário removido com sucesso!', 'success')
     return redirect(url_for('admin_index'))
 
 
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
+@login_required
 @admin_required
 def reset_password(user_id):
     db = get_db()
@@ -245,6 +291,39 @@ def reset_password(user_id):
     db.close()
     flash('Senha do usuário redefinida para o padrão com sucesso!', 'success')
     return redirect(url_for('admin_index'))
+
+
+@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    db = get_db()
+    if request.method == 'POST':
+        email = request.form['email']
+        municipio = request.form['municipio']
+        responsavel = request.form['responsavel']
+        telefone = request.form['telefone']
+        is_admin_val = 1 if request.form.get('is_admin') else 0
+        must_reset_val = 1 if request.form.get('must_reset_password') else 0
+
+        try:
+            db.execute(
+                'UPDATE users SET email = ?, municipio = ?, responsavel = ?, telefone = ?, is_admin = ?, must_reset_password = ? WHERE id = ?',
+                (email, municipio, responsavel, telefone, is_admin_val, must_reset_val, user_id)
+            )
+            db.commit()
+            flash('Usuário atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_index'))
+        except sqlite3.IntegrityError:
+            flash(f'O e-mail {email} já está em uso por outro usuário.', 'danger')
+
+    user_to_edit = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    db.close()
+    if user_to_edit is None:
+        flash('Usuário não encontrado.', 'danger')
+        return redirect(url_for('admin_index'))
+
+    return render_template('edit_user.html', user=user_to_edit)
 
 
 if __name__ == '__main__':

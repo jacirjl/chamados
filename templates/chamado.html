@@ -5,15 +5,10 @@
 {% block content %}
 <h1>Abertura de Chamado Técnico</h1>
 
-<!-- Seção com os dados do usuário -->
 <div class="user-info">
     <div class="info-item">
         <label>Solicitante:</label>
         <input type="text" value="{{ user.responsavel }}" disabled>
-    </div>
-    <div class="info-item">
-        <label>Telefone:</label>
-        <input type="tel" value="{{ user.telefone }}" disabled>
     </div>
     <div class="info-item">
         <label>E-mail:</label>
@@ -25,34 +20,33 @@
     </div>
 </div>
 
-<!-- Formulário para registrar o chamado -->
-<form method="post" action="{{ url_for('submit_chamado') }}">
-    <h2>Smartphones</h2>
+<form method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data">
+    <h2>Equipamentos</h2>
     <h3>Selecione o dispositivo que necessita do suporte</h3>
     <div id="imeiTableContainer">
-        {% if smartphones %}
+        {% if equipamentos %}
             <table>
                 <thead>
                     <tr>
                         <th>Selecionar</th>
-                        <th>IMEI</th>
+                        <th>IMEI 1</th>
                         <th>Marca</th>
                         <th>Modelo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for s in smartphones %}
+                    {% for equipamento in equipamentos %}
                     <tr>
-                        <td><input type="radio" name="selectedDevice" value="{{ s.imei }}" required></td>
-                        <td>{{ s.imei }}</td>
-                        <td>{{ s.marca }}</td>
-                        <td>{{ s.modelo }}</td>
+                        <td><input type="radio" name="selectedDevice" value="{{ equipamento.imei1 }}" required></td>
+                        <td>{{ equipamento.imei1 }}</td>
+                        <td>{{ equipamento.marca }}</td>
+                        <td>{{ equipamento.modelo }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
-            <p>Nenhum dispositivo disponível encontrado para este município.</p>
+            <p>Nenhum equipamento disponível encontrado para este município.</p>
         {% endif %}
     </div>
 
@@ -72,10 +66,15 @@
         <label for="observacoes">Detalhamento do problema/solicitação:</label>
         <textarea id="observacoes" name="observacoes" rows="5" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
     </div>
+
+    <div class="form-group">
+        <label for="foto">Anexar Foto (Opcional):</label>
+        <input type="file" id="foto" name="foto" accept="image/png, image/jpeg, image/gif">
+    </div>
+
     <button type="submit">Registrar Chamado</button>
 </form>
 
-<!-- Seção para exibir chamados recentes -->
 {% if chamados %}
 <hr>
 <h2>Últimos Chamados Registrados</h2>
@@ -86,6 +85,7 @@
                 <th>Data</th>
                 <th>Tipo de Problema</th>
                 <th>IMEI</th>
+                <th>Status</th>
             </tr>
         </thead>
         <tbody>
@@ -94,6 +94,7 @@
                 <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
                 <td>{{ chamado.tipo_problema }}</td>
                 <td>{{ chamado.smartphone_imei }}</td>
+                <td>{{ chamado.status }}</td>
             </tr>
             {% endfor %}
         </tbody>
