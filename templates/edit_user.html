@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Usuário</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .form-row {
+            display: flex;
+            gap: 2em;
+            margin-bottom: 1.5em;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .checkbox-group input {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Editar Usuário: {{ user.responsavel }}</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="responsavel">Responsável</label>
+                    <input type="text" id="responsavel" name="responsavel" value="{{ user.responsavel }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" value="{{ user.email }}" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="municipio">Município</label>
+                    <input type="text" id="municipio" name="municipio" value="{{ user.municipio }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="telefone">Telefone</label>
+                    <input type="text" id="telefone" name="telefone" value="{{ user.telefone }}" required>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="form-row">
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="is_admin" name="is_admin" {% if user.is_admin %}checked{% endif %}>
+                    <label for="is_admin">É Administrador?</label>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="must_reset_password" name="must_reset_password" {% if user.must_reset_password %}checked{% endif %}>
+                    <label for="must_reset_password">Forçar Redefinição de Senha no Próximo Login?</label>
+                </div>
+            </div>
+
+            <button type="submit">Salvar Alterações</button>
+            <a href="{{ url_for('admin_index') }}" style="margin-left: 1em; color: #6c757d;">Cancelar</a>
+        </form>
+    </div>
+</body>
+</html>
