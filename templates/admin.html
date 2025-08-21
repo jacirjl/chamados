@@ -11,8 +11,7 @@
 </head>
 <body>
     <div class="container">
-        <a href="{{ url_for('logout') }}" class="logout-button" style="float: right; text-decoration: none;">Sair</a>
-        <h1>Gestão de Usuários</h1>
+        <h1 id="topo-admin">Gestão de Usuários</h1>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -22,11 +21,15 @@
             {% endif %}
         {% endwith %}
 
-        <form method="get" action="{{ url_for('admin_index') }}" style="margin-bottom: 2em; display: flex; gap: 10px;">
-            <input type="text" name="search" placeholder="Filtrar por nome, email ou município..." value="{{ search_query or '' }}" style="flex-grow: 1;">
-            <button type="submit">Filtrar</button>
-            <a href="{{ url_for('admin_index') }}" style="text-decoration: none; padding: 0 15px; background-color: #6c757d; color: white; border-radius: 4px; display: flex; align-items: center;">Limpar</a>
-        </form>
+        <div style="margin-bottom: 2em; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+            <button type="button" id="btnNovoUsuario" class="button-link" style="background-color: #28a745;">Novo Usuário</button>
+            <form method="get" action="{{ url_for('admin_index') }}" style="display: flex; flex-grow: 1; gap: 10px;">
+                <input type="text" name="search" placeholder="Filtrar por nome, email ou município..." value="{{ search_query or '' }}" style="flex-grow: 1;">
+                <button type="submit">Filtrar</button>
+                <a href="{{ url_for('admin_index') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
+            </form>
+            <a href="{{ url_for('index') }}" class="button-link" style="background-color: #17a2b8;">Voltar</a>
+        </div>
 
         <h2>Usuários Cadastrados</h2>
         <table>
@@ -45,7 +48,7 @@
                     <td>{{ user.email }}</td>
                     <td>{{ user.municipio }}</td>
                     <td>
-                        <a href="{{ url_for('edit_user', user_id=user.id) }}" style="text-decoration: none; padding: 5px 10px; background-color: #ffc107; color: black; border-radius: 4px; margin-right: 5px;">Editar</a>
+                        <a href="{{ url_for('edit_user', user_id=user.id) }}" class="button-link" style="background-color: #ffc107; color: black; margin-right: 5px;">Editar</a>
                         <form action="{{ url_for('reset_password', user_id=user.id) }}" method="post" onsubmit="return confirm('Redefinir a senha deste usuário?');" style="display: inline;">
                             <button type="submit">Redefinir Senha</button>
                         </form>
@@ -63,7 +66,7 @@
         </table>
 
         <hr>
-        <h2>Adicionar Novo Usuário</h2>
+        <h2 id="formAdicionarUsuario">Adicionar Novo Usuário</h2>
         <form action="{{ url_for('add_user') }}" method="post">
              <div class="form-group">
                 <input type="text" name="responsavel" placeholder="Nome do Responsável" required>
@@ -85,8 +88,22 @@
                 <input type="checkbox" id="must_reset_password" name="must_reset_password" checked>
                 <label for="must_reset_password">Forçar Redefinição de Senha no Próximo Login?</label>
             </div>
-            <button type="submit" style="background-color: #28a745; margin-top: 1em;">Adicionar Usuário</button>
+            <div style="margin-top: 1em;">
+                <button type="submit" style="background-color: #28a745;">Adicionar Usuário</button>
+                <a href="#topo-admin" class="button-link" style="background-color: #6c757d; margin-left: 10px;">Cancelar</a>
+            </div>
         </form>
     </div>
+
+    <script>
+        document.getElementById('btnNovoUsuario').addEventListener('click', function() {
+            const formSection = document.getElementById('formAdicionarUsuario');
+            formSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                document.querySelector('form[action="{{ url_for('add_user') }}"] input[name="responsavel"]').focus();
+            }, 500);
+        });
+    </script>
+
 </body>
 </html>

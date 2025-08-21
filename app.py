@@ -1,4 +1,4 @@
-# app.py
+# app.py (sem alterações)
 
 import os
 import sqlite3
@@ -81,13 +81,9 @@ def index():
         'SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
         (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')
     ).fetchall()
-    recentes_chamados = db.execute(
-        'SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC LIMIT 5',
-        (g.user['email'],)
-    ).fetchall()
-    db.close()
 
-    return render_template('chamado.html', equipamentos=equipamentos, chamados=recentes_chamados)
+    db.close()
+    return render_template('chamado.html', equipamentos=equipamentos)
 
 
 @app.route('/login', methods=['GET', 'POST'])

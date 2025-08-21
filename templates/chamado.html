@@ -29,24 +29,40 @@
                 <thead>
                     <tr>
                         <th>Selecionar</th>
+                        <th>Patrimônio</th>
                         <th>IMEI 1</th>
+                        <th>IMEI 2</th>
                         <th>Marca</th>
                         <th>Modelo</th>
+                        <th>Nº de Série</th>
+                        <th>Local de Uso</th>
+                        <th>Situação</th>
+                        <th>Data da Entrega</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for equipamento in equipamentos %}
                     <tr>
                         <td><input type="radio" name="selectedDevice" value="{{ equipamento.imei1 }}" required></td>
+                        <td>{{ equipamento.patrimonio }}</td>
                         <td>{{ equipamento.imei1 }}</td>
+                        <td>{{ equipamento.imei2 }}</td>
                         <td>{{ equipamento.marca }}</td>
                         <td>{{ equipamento.modelo }}</td>
+                        <td>{{ equipamento.numeroDeSerie }}</td>
+                        <td>{{ equipamento.localdeUso }}</td>
+                        <td>{{ equipamento.situacao }}</td>
+                        <td>
+                            {% if equipamento.dataEntrega %}
+                                {{ equipamento.dataEntrega.split(' ')[0].split('-') | reverse | join('/') }}
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
-            <p>Nenhum equipamento disponível encontrado para este município.</p>
+            <p style="padding: 1em;">Nenhum equipamento disponível encontrado para este município.</p>
         {% endif %}
     </div>
 
@@ -64,7 +80,7 @@
     </div>
     <div class="form-group">
         <label for="observacoes">Detalhamento do problema/solicitação:</label>
-        <textarea id="observacoes" name="observacoes" rows="5" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
+        <textarea id="observacoes" name="observacoes" rows="4" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
     </div>
 
     <div class="form-group">
@@ -74,32 +90,5 @@
 
     <button type="submit">Registrar Chamado</button>
 </form>
-
-{% if chamados %}
-<hr>
-<h2>Últimos Chamados Registrados</h2>
-<div id="imeiTableContainer">
-    <table>
-        <thead>
-            <tr>
-                <th>Data</th>
-                <th>Tipo de Problema</th>
-                <th>IMEI</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for chamado in chamados %}
-            <tr>
-                <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
-                <td>{{ chamado.tipo_problema }}</td>
-                <td>{{ chamado.smartphone_imei }}</td>
-                <td>{{ chamado.status }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
 
 {% endblock %}
