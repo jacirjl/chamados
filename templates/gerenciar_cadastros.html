@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+
+{% block title %}Gerenciar Cadastros{% endblock %}
+
+{% block content %}
+<h1>Gerenciar Cadastros</h1>
+<p>Nesta página você pode adicionar ou remover os tipos de problema e status que aparecem nos formulários.</p>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="management-grid">
+    <div class="management-section">
+        <h2>Tipos de Problema</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th style="width: 100px;">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tipo in tipos_problema_list %}
+                <tr>
+                    <td>{{ tipo.nome }}</td>
+                    <td>
+                        <form action="{{ url_for('delete_tipo_problema', tipo_id=tipo.id) }}" method="post" onsubmit="return confirm('Tem certeza?');">
+                            <button type="submit" class="delete-button-small">Remover</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <form action="{{ url_for('add_tipo_problema') }}" method="post" class="add-form">
+            <input type="text" name="nome" placeholder="Nome do novo tipo" required>
+            <button type="submit">Adicionar</button>
+        </form>
+    </div>
+
+    <div class="management-section">
+        <h2>Status de Chamados</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th style="width: 100px;">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in status_list %}
+                <tr>
+                    <td>{{ s.nome }}</td>
+                    <td>
+                        <form action="{{ url_for('delete_status', status_id=s.id) }}" method="post" onsubmit="return confirm('Tem certeza?');">
+                            <button type="submit" class="delete-button-small">Remover</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <form action="{{ url_for('add_status') }}" method="post" class="add-form">
+            <input type="text" name="nome" placeholder="Nome do novo status" required>
+            <button type="submit">Adicionar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

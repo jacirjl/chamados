@@ -10,26 +10,14 @@
         <h3>Total de Chamados</h3>
         <p>{{ kpis.get('Total', 0) }}</p>
     </div>
-    <div class="card card-open">
-        <h3>Abertos</h3>
-        <p>{{ kpis.get('Aberto', 0) }}</p>
-    </div>
-    <div class="card card-progress">
-        <h3>Em Andamento</h3>
-        <p>{{ kpis.get('Em Andamento', 0) }}</p>
-    </div>
-    <div class="card card-waiting">
-        <h3>Aguardando Peça</h3>
-        <p>{{ kpis.get('Aguardando Peça', 0) }}</p>
-    </div>
-    <div class="card card-closed">
-        <h3>Finalizados</h3>
-        <p>{{ kpis.get('Finalizado', 0) }}</p>
-    </div>
-    <div class="card card-canceled">
-        <h3>Cancelados</h3>
-        <p>{{ kpis.get('Cancelado', 0) }}</p>
-    </div>
+    {% for status, contagem in kpis.items() %}
+        {% if status != 'Total' and status != 'Usuários' %}
+        <div class="card">
+            <h3 class="card-title-{{ status.lower().replace(' ', '-') }}">{{ status }}</h3>
+            <p>{{ contagem }}</p>
+        </div>
+        {% endif %}
+    {% endfor %}
     <div class="card card-users">
         <h3>Total de Usuários</h3>
         <p>{{ kpis.get('Usuários', 0) }}</p>
@@ -67,8 +55,8 @@
                 <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
                 <td>{{ chamado.solicitante_email }}</td>
                 <td>{{ chamado.municipio }}</td>
-                <td>{{ chamado.tipo_problema }}</td>
-                <td>{{ chamado.status }}</td>
+                <td>{{ chamado.tipo_problema_nome }}</td>
+                <td>{{ chamado.status_nome }}</td>
             </tr>
             {% else %}
             <tr>
@@ -80,6 +68,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
     // Gráfico de Pizza: Chamados por Status
     const statusCtx = document.getElementById('statusChart').getContext('2d');

@@ -1,4 +1,4 @@
-# app.py
+# app.py (sem alterações)
 
 import os
 import sqlite3
@@ -72,21 +72,18 @@ def inject_user():
 @app.route('/')
 @login_required
 def index():
-    if g.user['must_reset_password'] == 1:
-        flash('Por favor, redefina sua senha para continuar.', 'warning')
+    if g.user['must_reset_password']:
         return redirect(url_for('redefinir_senha'))
-
     if g.user['is_admin']:
         return redirect(url_for('dashboard'))
 
     db = get_db()
-    equipamentos = db.execute(
-        'SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-        (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')
-    ).fetchall()
-
+    equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+                              (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
+    tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
-    return render_template('chamado.html', equipamentos=equipamentos)
+
+    return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema)
 
 
 @app.route('/abrir_chamado_admin')
@@ -94,27 +91,19 @@ def index():
 @admin_required
 def abrir_chamado_admin():
     db = get_db()
-
     municipio_selecionado = request.args.get('municipio', None)
-
-    todos_municipios_cursor = db.execute('SELECT DISTINCT municipio FROM equipamentos ORDER BY municipio').fetchall()
-    todos_municipios = [row['municipio'] for row in todos_municipios_cursor]
+    todos_municipios = [row['municipio'] for row in
+                        db.execute('SELECT DISTINCT municipio FROM equipamentos ORDER BY municipio').fetchall()]
+    tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
 
     equipamentos = []
     if municipio_selecionado:
-        equipamentos = db.execute(
-            'SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-            (municipio_selecionado, 'Perdido', 'Roubado', 'Danificado')
-        ).fetchall()
+        equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+                                  (municipio_selecionado, 'Perdido', 'Roubado', 'Danificado')).fetchall()
 
     db.close()
-
-    return render_template(
-        'chamado.html',
-        equipamentos=equipamentos,
-        todos_municipios=todos_municipios,
-        municipio_selecionado=municipio_selecionado
-    )
+    return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
+                           todos_municipios=todos_municipios, municipio_selecionado=municipio_selecionado)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -179,7 +168,7 @@ def redefinir_senha():
 @login_required
 def submit_chamado():
     imei = request.form.get('selectedDevice')
-    tipo_problema = request.form.get('tipoProblema')
+    tipo_problema_id = request.form.get('tipoProblema')
     observacoes = request.form.get('observacoes')
 
     if g.user['is_admin']:
@@ -187,7 +176,7 @@ def submit_chamado():
     else:
         municipio_chamado = g.user['municipio']
 
-    if not all([imei, tipo_problema, observacoes, municipio_chamado]):
+    if not all([imei, tipo_problema_id, observacoes, municipio_chamado]):
         flash('Todos os campos do chamado são obrigatórios.', 'danger')
         return redirect(url_for('abrir_chamado_admin') if g.user['is_admin'] else url_for('index'))
 
@@ -201,10 +190,12 @@ def submit_chamado():
             foto_file.save(os.path.join(UPLOAD_FOLDER, foto_filename))
 
     db = get_db()
+    status_aberto_row = db.execute('SELECT id FROM status WHERE nome = ?', ('Aberto',)).fetchone()
+    status_aberto_id = status_aberto_row[0] if status_aberto_row else 1
+
     db.execute(
-        'INSERT INTO chamados (solicitante_email, municipio, smartphone_imei, tipo_problema, observacoes, status, foto) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (g.user['email'], municipio_chamado, imei, tipo_problema, observacoes, 'Aberto', foto_filename)
-    )
+        'INSERT INTO chamados (solicitante_email, municipio, smartphone_imei, tipo_problema_id, observacoes, status_id, foto) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (g.user['email'], municipio_chamado, imei, tipo_problema_id, observacoes, status_aberto_id, foto_filename))
     db.commit()
     db.close()
 
@@ -216,15 +207,27 @@ def submit_chamado():
 @login_required
 def meus_chamados():
     db = get_db()
-    status_options = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
+    status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
+
+    query = """
+        SELECT c.id, c.timestamp, c.municipio, c.smartphone_imei, c.observacoes, c.foto, c.solucao, c.status_id,
+               s.nome as status_nome,
+               tp.nome as tipo_problema_nome
+        FROM chamados c
+        JOIN status s ON c.status_id = s.id
+        JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
+    """
 
     if g.user['is_admin']:
-        todos_chamados = db.execute('SELECT * FROM chamados ORDER BY timestamp DESC').fetchall()
+        query += " ORDER BY c.timestamp DESC"
+        params = []
     else:
-        todos_chamados = db.execute('SELECT * FROM chamados WHERE solicitante_email = ? ORDER BY timestamp DESC',
-                                    (g.user['email'],)).fetchall()
+        query += " WHERE c.solicitante_email = ? ORDER BY c.timestamp DESC"
+        params = [g.user['email']]
 
+    todos_chamados = db.execute(query, params).fetchall()
     db.close()
+
     return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options)
 
 
@@ -237,63 +240,50 @@ def display_image(filename):
 @app.route('/chamado/update/<int:chamado_id>', methods=['POST'])
 @login_required
 def update_chamado(chamado_id):
-    novo_status = request.form.get('status')
+    novo_status_id = request.form.get('status')
     nova_solucao = request.form.get('solucao')
     db = get_db()
-    db.execute('UPDATE chamados SET status = ?, solucao = ? WHERE id = ?', (novo_status, nova_solucao, chamado_id))
+    db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
+               (novo_status_id, nova_solucao, chamado_id))
     db.commit()
     db.close()
     flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')
     return redirect(url_for('meus_chamados'))
 
-
-# --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
 @app.route('/dashboard')
 @login_required
 @admin_required
 def dashboard():
     db = get_db()
-
-    # --- LÓGICA ATUALIZADA PARA OS CARTÕES ---
-    # Lista de todos os status que queremos exibir nos cartões
-    status_para_kpis = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
     kpis = {}
-
-    # Busca a contagem para cada status individualmente
-    for status in status_para_kpis:
-        count = db.execute('SELECT COUNT(id) FROM chamados WHERE status = ?', (status,)).fetchone()[0]
-        kpis[status] = count
-
-    # Adiciona contagens gerais
+    status_list = db.execute('SELECT nome FROM status ORDER BY id').fetchall()
+    for status in status_list:
+        status_nome = status['nome']
+        count = db.execute('SELECT COUNT(c.id) FROM chamados c JOIN status s ON c.status_id = s.id WHERE s.nome = ?',
+                           (status_nome,)).fetchone()[0]
+        kpis[status_nome] = count
     kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
     kpis['Usuários'] = db.execute('SELECT COUNT(id) FROM users').fetchone()[0]
-
-    # --- Lógica para os gráficos (permanece a mesma) ---
-    # Dados para Gráfico de Status (Pizza)
-    status_data = db.execute('SELECT status, COUNT(id) as count FROM chamados GROUP BY status').fetchall()
-    status_labels = [row['status'] for row in status_data]
+    status_data = db.execute(
+        'SELECT s.nome, COUNT(c.id) as count FROM chamados c JOIN status s ON c.status_id = s.id GROUP BY s.nome').fetchall()
+    status_labels = [row['nome'] for row in status_data]
     status_values = [row['count'] for row in status_data]
-
-    # Dados para Gráfico de Tipo de Problema (Barras)
     tipo_data = db.execute(
-        'SELECT tipo_problema, COUNT(id) as count FROM chamados GROUP BY tipo_problema ORDER BY count DESC').fetchall()
-    tipo_labels = [row['tipo_problema'] for row in tipo_data]
+        'SELECT tp.nome, COUNT(c.id) as count FROM chamados c JOIN tipos_problema tp ON c.tipo_problema_id = tp.id GROUP BY tp.nome ORDER BY count DESC').fetchall()
+    tipo_labels = [row['nome'] for row in tipo_data]
     tipo_values = [row['count'] for row in tipo_data]
-
-    # Últimos 5 chamados
-    ultimos_chamados = db.execute('SELECT * FROM chamados ORDER BY timestamp DESC LIMIT 5').fetchall()
-
+    ultimos_chamados = db.execute("""
+        SELECT c.id, c.timestamp, c.solicitante_email, c.municipio, s.nome as status_nome, tp.nome as tipo_problema_nome
+        FROM chamados c
+        JOIN status s ON c.status_id = s.id
+        JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
+        ORDER BY c.timestamp DESC LIMIT 5
+    """).fetchall()
     db.close()
-
-    return render_template(
-        'dashboard.html',
-        kpis=kpis,  # Envia o dicionário completo de KPIs
-        status_labels=status_labels,
-        status_values=status_values,
-        tipo_labels=tipo_labels,
-        tipo_values=tipo_values,
-        ultimos_chamados=ultimos_chamados
-    )
+    return render_template('dashboard.html', kpis=kpis,
+                           status_labels=status_labels, status_values=status_values,
+                           tipo_labels=tipo_labels, tipo_values=tipo_values,
+                           ultimos_chamados=ultimos_chamados)
 
 
 @app.route('/admin/')
@@ -391,6 +381,89 @@ def edit_user(user_id):
         flash('Usuário não encontrado.', 'danger')
         return redirect(url_for('admin_index'))
     return render_template('edit_user.html', user=user_to_edit)
+
+
+@app.route('/admin/gerenciar')
+@login_required
+@admin_required
+def gerenciar_cadastros():
+    db = get_db()
+    status_list = db.execute('SELECT * FROM status ORDER BY nome').fetchall()
+    tipos_problema_list = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
+    db.close()
+    return render_template('gerenciar_cadastros.html', status_list=status_list, tipos_problema_list=tipos_problema_list)
+
+
+@app.route('/admin/status/add', methods=['POST'])
+@login_required
+@admin_required
+def add_status():
+    nome = request.form.get('nome')
+    if nome:
+        db = get_db()
+        try:
+            db.execute('INSERT INTO status (nome) VALUES (?)', (nome,))
+            db.commit()
+            flash('Novo status adicionado com sucesso!', 'success')
+        except sqlite3.IntegrityError:
+            flash('Este status já existe.', 'danger')
+        finally:
+            db.close()
+    else:
+        flash('O nome do status não pode ser vazio.', 'danger')
+    return redirect(url_for('gerenciar_cadastros'))
+
+
+@app.route('/admin/status/delete/<int:status_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_status(status_id):
+    db = get_db()
+    chamado_usando = db.execute('SELECT id FROM chamados WHERE status_id = ?', (status_id,)).fetchone()
+    if chamado_usando:
+        flash('Não é possível remover este status, pois ele está em uso por um ou mais chamados.', 'danger')
+    else:
+        db.execute('DELETE FROM status WHERE id = ?', (status_id,))
+        db.commit()
+        flash('Status removido com sucesso!', 'success')
+    db.close()
+    return redirect(url_for('gerenciar_cadastros'))
+
+
+@app.route('/admin/tipos_problema/add', methods=['POST'])
+@login_required
+@admin_required
+def add_tipo_problema():
+    nome = request.form.get('nome')
+    if nome:
+        db = get_db()
+        try:
+            db.execute('INSERT INTO tipos_problema (nome) VALUES (?)', (nome,))
+            db.commit()
+            flash('Novo tipo de problema adicionado com sucesso!', 'success')
+        except sqlite3.IntegrityError:
+            flash('Este tipo de problema já existe.', 'danger')
+        finally:
+            db.close()
+    else:
+        flash('O nome do tipo de problema não pode ser vazio.', 'danger')
+    return redirect(url_for('gerenciar_cadastros'))
+
+
+@app.route('/admin/tipos_problema/delete/<int:tipo_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_tipo_problema(tipo_id):
+    db = get_db()
+    chamado_usando = db.execute('SELECT id FROM chamados WHERE tipo_problema_id = ?', (tipo_id,)).fetchone()
+    if chamado_usando:
+        flash('Não é possível remover este tipo, pois ele está em uso por um ou mais chamados.', 'danger')
+    else:
+        db.execute('DELETE FROM tipos_problema WHERE id = ?', (tipo_id,))
+        db.commit()
+        flash('Tipo de problema removido com sucesso!', 'success')
+    db.close()
+    return redirect(url_for('gerenciar_cadastros'))
 
 
 if __name__ == '__main__':

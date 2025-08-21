@@ -21,41 +21,43 @@ print("Conectado ao banco de dados.")
 def setup_tables():
     """Cria as tabelas com a nova estrutura."""
 
-    # --- Tabela de Usuários (Inalterada) ---
+    # --- NOVAS TABELAS ---
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS status (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT UNIQUE NOT NULL
+    );
+    ''')
+    print("Tabela 'status' criada/verificada.")
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS tipos_problema (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT UNIQUE NOT NULL
+    );
+    ''')
+    print("Tabela 'tipos_problema' criada/verificada.")
+
+    # --- TABELAS ANTIGAS ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        municipio TEXT NOT NULL,
-        responsavel TEXT NOT NULL,
-        telefone TEXT NOT NULL,
-        must_reset_password BOOLEAN DEFAULT 1,
-        is_admin BOOLEAN DEFAULT 0
+        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
+        municipio TEXT NOT NULL, responsavel TEXT NOT NULL, telefone TEXT NOT NULL,
+        must_reset_password BOOLEAN DEFAULT 1, is_admin BOOLEAN DEFAULT 0
     );
     ''')
 
-    # --- Tabela de Equipamentos ---
-    cursor.execute('DROP TABLE IF EXISTS smartphones')
+    cursor.execute('DROP TABLE IF EXISTS equipamentos')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS equipamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        municipio TEXT NOT NULL,
-        imei1 TEXT UNIQUE,
-        imei2 TEXT UNIQUE,
-        marca TEXT,
-        modelo TEXT,
-        capacidade TEXT,
-        numeroDeSerie TEXT,
-        dataEntrega TEXT,
-        localdeUso TEXT,
-        situacao TEXT,
-        patrimonio TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT, municipio TEXT NOT NULL, imei1 TEXT UNIQUE, imei2 TEXT,
+        marca TEXT, modelo TEXT, capacidade TEXT, numeroDeSerie TEXT, dataEntrega TEXT,
+        localdeUso TEXT, situacao TEXT, patrimonio TEXT
     );
     ''')
     print("Tabela 'equipamentos' criada/verificada.")
 
-    # --- Tabela de Chamados (Com novo campo 'solucao') ---
+    # --- TABELA CHAMADOS ATUALIZADA ---
     cursor.execute('DROP TABLE IF EXISTS chamados')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS chamados (
@@ -64,16 +66,32 @@ def setup_tables():
         solicitante_email TEXT NOT NULL,
         municipio TEXT NOT NULL,
         smartphone_imei TEXT NOT NULL,
-        tipo_problema TEXT NOT NULL,
+        tipo_problema_id INTEGER NOT NULL,
         observacoes TEXT NOT NULL,
-        status TEXT DEFAULT 'Aberto', 
+        status_id INTEGER NOT NULL,
         foto TEXT,
-        solucao TEXT
+        solucao TEXT,
+        FOREIGN KEY (tipo_problema_id) REFERENCES tipos_problema (id),
+        FOREIGN KEY (status_id) REFERENCES status (id)
     );
     ''')
-    print("Tabela 'chamados' criada/verificada.")
+    print("Tabela 'chamados' atualizada/verificada.")
 
     conn.commit()
+
+
+def populate_lookup_tables():
+    """Popula as novas tabelas com valores padrão."""
+    default_status = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
+    default_problemas = ['Octostudio', 'Sistema Operacional', 'Hardware/Dispositivo', 'Dúvidas/Outros']
+
+    try:
+        cursor.executemany("INSERT OR IGNORE INTO status (nome) VALUES (?)", [(s,) for s in default_status])
+        cursor.executemany("INSERT OR IGNORE INTO tipos_problema (nome) VALUES (?)", [(p,) for p in default_problemas])
+        conn.commit()
+        print("Tabelas 'status' e 'tipos_problema' populadas com valores padrão.")
+    except Exception as e:
+        print(f"Erro ao popular tabelas de lookup: {e}")
 
 
 def populate_users():
@@ -105,9 +123,9 @@ def populate_equipamentos():
         df.columns = [str(col).lower().strip() for col in df.columns]
 
         column_map = {
-            'município': 'municipio', 'imei1': 'imei1', 'imei2': 'imei2', 'marca': 'marca',
-            'modelo': 'modelo', 'capacidade': 'capacidade', 'numerodeserie': 'numeroDeSerie',
-            'dataentrega': 'dataEntrega', 'localdeuso': 'localdeUso', 'situação': 'situacao',
+            'município': 'municipio', 'imei 1': 'imei1', 'imei 2': 'imei2', 'marca': 'marca',
+            'modelo': 'modelo', 'capacidade': 'capacidade', 'numero de serie': 'numeroDeSerie',
+            'data da entrega': 'dataEntrega', 'local de uso': 'localdeUso', 'situação': 'situacao',
             'patrimonio': 'patrimonio'
         }
         df.rename(columns=column_map, inplace=True)
@@ -125,10 +143,14 @@ def populate_equipamentos():
 # --- Execução Principal ---
 if __name__ == '__main__':
     setup_tables()
-    if not os.path.exists(EXCEL_FILE):
-        print(f"\nAVISO: '{EXCEL_FILE}' não encontrado. As tabelas foram criadas, mas não populadas.")
-    else:
+    populate_lookup_tables()
+
+    if os.path.exists(EXCEL_FILE):
         populate_users()
         populate_equipamentos()
+    else:
+        print(
+            f"\nAVISO: '{EXCEL_FILE}' não encontrado. As tabelas foram criadas, mas não populadas com dados da planilha.")
+
     conn.close()
     print("\nProcesso de inicialização do banco de dados concluído.")

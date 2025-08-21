@@ -12,7 +12,6 @@
             <div class="sidebar-header">
                 <h1 class="sidebar-title">Sistema de Chamados</h1>
             </div>
-
             {% if user %}
             <nav class="sidebar-nav">
                 <ul>
@@ -20,14 +19,13 @@
                         <li><a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}">Dashboard</a></li>
                         <li><a href="{{ url_for('abrir_chamado_admin') }}" class="{{ 'active' if request.endpoint == 'abrir_chamado_admin' else '' }}">Abrir Chamado (Admin)</a></li>
                         <li><a href="{{ url_for('admin_index') }}" class="{{ 'active' if 'admin_index' in request.endpoint else '' }}">Gestão de Usuários</a></li>
+                        <li><a href="{{ url_for('gerenciar_cadastros') }}" class="{{ 'active' if request.endpoint == 'gerenciar_cadastros' else '' }}">Gerenciar Cadastros</a></li>
                     {% else %}
                         <li><a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Abrir Chamado</a></li>
                     {% endif %}
-
                     <li><a href="{{ url_for('meus_chamados') }}" class="{{ 'active' if request.endpoint == 'meus_chamados' else '' }}">Meus Chamados</a></li>
                 </ul>
             </nav>
-
             <div class="sidebar-footer">
                 <p style="text-align: center; color: #adb5bd; font-size: 0.9em;">Logado como:<br><b>{{ user.responsavel }}</b></p>
                 <a href="{{ url_for('logout') }}" class="logout-button">Sair</a>
@@ -37,10 +35,20 @@
 
         <main class="main-content">
             <div class="container">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
                 {% block content %}{% endblock %}
             </div>
         </main>
     </div>
 </body>
 </html>
-#

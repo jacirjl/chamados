@@ -167,6 +167,7 @@ tbody tr:nth-child(odd) { background-color: #f8f9fa; }
     white-space: nowrap;
 }
 
+
 .col-solucao { width: 30%; }
 .col-foto { width: 120px; text-align: center; }
 .col-acao { width: 110px; text-align: center; }
@@ -220,12 +221,11 @@ tbody tr:nth-child(odd) { background-color: #f8f9fa; }
     margin-bottom: 0;
     color: #343a40;
 }
-/* Cores para os cartões */
-.card.card-open p { color: #dc3545; }
-.card.card-progress p { color: #007bff; }
-.card.card-waiting p { color: #ffc107; }
-.card.card-closed p { color: #28a745; }
-.card.card-canceled p { color: #6c757d; }
+.card.card-open p, .card h3:contains('Aberto') + p { color: #dc3545; }
+.card.card-progress p, .card h3:contains('Em Andamento') + p { color: #007bff; }
+.card.card-waiting p, .card h3:contains('Aguardando Peça') + p { color: #ffc107; }
+.card.card-closed p, .card h3:contains('Finalizado') + p { color: #28a745; }
+.card.card-canceled p, .card h3:contains('Cancelado') + p { color: #6c757d; }
 .card.card-users p { color: #17a2b8; }
 
 
@@ -251,4 +251,23 @@ tbody tr:nth-child(odd) { background-color: #f8f9fa; }
     .charts-grid {
         grid-template-columns: 1fr;
     }
+}
+/* Estilos para a página de gerenciar cadastros */
+.management-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2em;
+}
+.management-section {
+    background-color: #fff;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.management-section table { table-layout: auto; }
+.add-form { display: flex; gap: 10px; margin-top: 1.5em; }
+.add-form input { flex-grow: 1; }
+.delete-button-small { padding: 0.25em 0.5em; font-size: 0.8em; background-color: #dc3545; }
+@media (max-width: 992px) {
+    .management-grid { grid-template-columns: 1fr; }
 }

@@ -8,14 +8,6 @@
 </div>
 
 <div class="chamados-container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     {% if chamados %}
         <table>
             <thead>
@@ -38,13 +30,13 @@
                     <td>#{{ chamado.id }}</td>
                     <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
                     <td>{{ chamado.municipio }}</td>
-                    <td>{{ chamado.tipo_problema }}</td>
+                    <td>{{ chamado.tipo_problema_nome }}</td>
                     <td>{{ chamado.smartphone_imei }}</td>
                     <td>
                         <select name="status">
                             {% for option in status_options %}
-                                <option value="{{ option }}" {% if option == chamado.status %}selected{% endif %}>
-                                    {{ option }}
+                                <option value="{{ option.id }}" {% if option.id == chamado.status_id %}selected{% endif %}>
+                                    {{ option.nome }}
                                 </option>
                             {% endfor %}
                         </select>
@@ -72,9 +64,5 @@
     {% else %}
         <p>Você ainda não registrou nenhum chamado.</p>
     {% endif %}
-</div>
-
-<div style="text-align: center; margin-top: 2em;">
-    <a href="{{ url_for('index') }}" class="back-button">Abrir um Novo Chamado</a>
 </div>
 {% endblock %}
