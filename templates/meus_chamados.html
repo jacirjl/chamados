@@ -8,6 +8,27 @@
 </div>
 
 <div class="chamados-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="get" class="filter-form">
+        <label for="status">Filtrar por Status:</label>
+        <select name="status" id="status" onchange="this.form.submit()">
+            <option value="">-- Todos os Status --</option>
+            {% for option in status_options %}
+                <option value="{{ option.id }}" {% if option.id == status_filter_id %}selected{% endif %}>
+                    {{ option.nome }}
+                </option>
+            {% endfor %}
+        </select>
+        <a href="{{ url_for('meus_chamados') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
+    </form>
+
     {% if chamados %}
         <table>
             <thead>
@@ -62,7 +83,11 @@
             </tbody>
         </table>
     {% else %}
-        <p>Você ainda não registrou nenhum chamado.</p>
+        <p style="text-align: center; margin-top: 1em;">Nenhum chamado encontrado com os filtros selecionados.</p>
     {% endif %}
+</div>
+
+<div style="text-align: center; margin-top: 2em;">
+    <a href="{{ url_for('index') }}" class="back-button">Abrir um Novo Chamado</a>
 </div>
 {% endblock %}

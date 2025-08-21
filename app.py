@@ -1,4 +1,4 @@
-# app.py (sem alterações)
+# app.py
 
 import os
 import sqlite3
@@ -171,10 +171,7 @@ def submit_chamado():
     tipo_problema_id = request.form.get('tipoProblema')
     observacoes = request.form.get('observacoes')
 
-    if g.user['is_admin']:
-        municipio_chamado = request.form.get('municipio_selecionado')
-    else:
-        municipio_chamado = g.user['municipio']
+    municipio_chamado = request.form.get('municipio_selecionado') if g.user['is_admin'] else g.user['municipio']
 
     if not all([imei, tipo_problema_id, observacoes, municipio_chamado]):
         flash('Todos os campos do chamado são obrigatórios.', 'danger')
@@ -209,6 +206,9 @@ def meus_chamados():
     db = get_db()
     status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
 
+    # Pega o filtro da URL, se existir (ex: /meus_chamados?status=2)
+    status_filter_id = request.args.get('status', None, type=int)
+
     query = """
         SELECT c.id, c.timestamp, c.municipio, c.smartphone_imei, c.observacoes, c.foto, c.solucao, c.status_id,
                s.nome as status_nome,
@@ -218,17 +218,31 @@ def meus_chamados():
         JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
     """
 
-    if g.user['is_admin']:
-        query += " ORDER BY c.timestamp DESC"
-        params = []
-    else:
-        query += " WHERE c.solicitante_email = ? ORDER BY c.timestamp DESC"
-        params = [g.user['email']]
+    params = []
+    conditions = []
 
-    todos_chamados = db.execute(query, params).fetchall()
+    # Adiciona filtro por usuário (se não for admin)
+    if not g.user['is_admin']:
+        conditions.append("c.solicitante_email = ?")
+        params.append(g.user['email'])
+
+    # Adiciona filtro por status (se selecionado na URL)
+    if status_filter_id:
+        conditions.append("c.status_id = ?")
+        params.append(status_filter_id)
+
+    # Constrói a cláusula WHERE se houver condições
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    query += " ORDER BY c.timestamp DESC"
+
+    todos_chamados = db.execute(query, tuple(params)).fetchall()
     db.close()
 
-    return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options)
+    # Passa o filtro de volta para o template para que ele possa manter o dropdown selecionado
+    return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options,
+                           status_filter_id=status_filter_id)
 
 
 @app.route('/uploads/<path:filename>')
@@ -250,6 +264,8 @@ def update_chamado(chamado_id):
     flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')
     return redirect(url_for('meus_chamados'))
 
+
+# --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
 @app.route('/dashboard')
 @login_required
 @admin_required
@@ -280,10 +296,12 @@ def dashboard():
         ORDER BY c.timestamp DESC LIMIT 5
     """).fetchall()
     db.close()
-    return render_template('dashboard.html', kpis=kpis,
-                           status_labels=status_labels, status_values=status_values,
-                           tipo_labels=tipo_labels, tipo_values=tipo_values,
-                           ultimos_chamados=ultimos_chamados)
+    return render_template(
+        'dashboard.html', kpis=kpis,
+        status_labels=status_labels, status_values=status_values,
+        tipo_labels=tipo_labels, tipo_values=tipo_values,
+        ultimos_chamados=ultimos_chamados
+    )
 
 
 @app.route('/admin/')
