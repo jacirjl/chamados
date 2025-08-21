@@ -15,12 +15,33 @@
         <input type="email" value="{{ user.email }}" disabled>
     </div>
     <div class="info-item">
-        <label>Município:</label>
-        <input type="text" value="{{ user.municipio }}" disabled>
+        <label>Município do Chamado:</label>
+        <input type="text" value="{{ municipio_selecionado or user.municipio }}" disabled>
     </div>
 </div>
 
+{% if user.is_admin %}
+<div class="municipio-selector">
+    <form method="get" action="{{ url_for('abrir_chamado_admin') }}">
+        <label for="municipio">Selecione um Município para Abrir o Chamado:</label>
+        <div style="display: flex; gap: 10px;">
+            <select name="municipio" id="municipio" required onchange="this.form.submit()">
+                <option value="">-- Escolha um município --</option>
+                {% for m in todos_municipios %}
+                    <option value="{{ m }}" {% if m == municipio_selecionado %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+
 <form method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data">
+    {% if user.is_admin and municipio_selecionado %}
+        <input type="hidden" name="municipio_selecionado" value="{{ municipio_selecionado }}">
+    {% endif %}
+
     <h2>Equipamentos</h2>
     <h3>Selecione o dispositivo que necessita do suporte</h3>
     <div id="imeiTableContainer">
@@ -62,7 +83,11 @@
                 </tbody>
             </table>
         {% else %}
-            <p style="padding: 1em;">Nenhum equipamento disponível encontrado para este município.</p>
+            {% if user.is_admin and not municipio_selecionado %}
+                <p style="padding: 1em;">Por favor, selecione um município acima para ver os equipamentos.</p>
+            {% else %}
+                <p style="padding: 1em;">Nenhum equipamento disponível encontrado para este município.</p>
+            {% endif %}
         {% endif %}
     </div>
 

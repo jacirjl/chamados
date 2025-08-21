@@ -1,0 +1,145 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>Dashboard de Chamados</h1>
+
+<div class="dashboard-cards">
+    <div class="card">
+        <h3>Total de Chamados</h3>
+        <p>{{ kpis.get('Total', 0) }}</p>
+    </div>
+    <div class="card card-open">
+        <h3>Abertos</h3>
+        <p>{{ kpis.get('Aberto', 0) }}</p>
+    </div>
+    <div class="card card-progress">
+        <h3>Em Andamento</h3>
+        <p>{{ kpis.get('Em Andamento', 0) }}</p>
+    </div>
+    <div class="card card-waiting">
+        <h3>Aguardando Peça</h3>
+        <p>{{ kpis.get('Aguardando Peça', 0) }}</p>
+    </div>
+    <div class="card card-closed">
+        <h3>Finalizados</h3>
+        <p>{{ kpis.get('Finalizado', 0) }}</p>
+    </div>
+    <div class="card card-canceled">
+        <h3>Cancelados</h3>
+        <p>{{ kpis.get('Cancelado', 0) }}</p>
+    </div>
+    <div class="card card-users">
+        <h3>Total de Usuários</h3>
+        <p>{{ kpis.get('Usuários', 0) }}</p>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-container">
+        <h2>Chamados por Status</h2>
+        <canvas id="statusChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h2>Chamados por Tipo de Problema</h2>
+        <canvas id="tipoChart"></canvas>
+    </div>
+</div>
+
+<div class="recent-tickets">
+    <h2>Últimos Chamados Registrados</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Data</th>
+                <th>Solicitante</th>
+                <th>Município</th>
+                <th>Problema</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for chamado in ultimos_chamados %}
+            <tr>
+                <td>#{{ chamado.id }}</td>
+                <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
+                <td>{{ chamado.solicitante_email }}</td>
+                <td>{{ chamado.municipio }}</td>
+                <td>{{ chamado.tipo_problema }}</td>
+                <td>{{ chamado.status }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center;">Nenhum chamado registrado ainda.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Gráfico de Pizza: Chamados por Status
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: {{ status_labels | tojson }},
+            datasets: [{
+                label: 'Chamados por Status',
+                data: {{ status_values | tojson }},
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',  // Vermelho para Aberto
+                    'rgba(54, 162, 235, 0.7)',  // Azul para Em Andamento
+                    'rgba(255, 206, 86, 0.7)',  // Amarelo para Aguardando Peça
+                    'rgba(75, 192, 192, 0.7)',  // Verde para Finalizado
+                    'rgba(153, 102, 255, 0.7)', // Roxo para Cancelado
+                    'rgba(255, 159, 64, 0.7)'   // Laranja para outros status
+                ],
+                borderColor: 'white',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        }
+    });
+
+    // Gráfico de Barras: Chamados por Tipo
+    const tipoCtx = document.getElementById('tipoChart').getContext('2d');
+    new Chart(tipoCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ tipo_labels | tojson }},
+            datasets: [{
+                label: 'Nº de Chamados',
+                data: {{ tipo_values | tojson }},
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            indexAxis: 'y',
+            scales: {
+                x: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

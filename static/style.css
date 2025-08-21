@@ -23,7 +23,6 @@ h1, h2, h3 {
     margin-bottom: 0.75em;
 }
 
-
 /* Alertas e Mensagens (Flash) */
 .alert {
     padding: 1em;
@@ -50,6 +49,7 @@ h1, h2, h3 {
 .sidebar-header { text-align: center; padding: 1.5em; }
 .sidebar-title { margin: 0; }
 .sidebar-nav { list-style-type: none; padding: 0; margin: 0; flex-grow: 1; }
+.sidebar-nav ul { list-style-type: none; padding: 0; margin: 0; }
 .sidebar-nav a {
     display: block;
     color: #adb5bd;
@@ -84,6 +84,7 @@ h1, h2, h3 {
 .main-content {
     flex-grow: 1;
     padding: 1em;
+    overflow-x: auto;
 }
 
 /* Formulários */
@@ -154,21 +155,17 @@ tbody tr:nth-child(odd) { background-color: #f8f9fa; }
     min-height: 50px;
 }
 
-/* --- ALTERAÇÃO AQUI --- */
 #imeiTableContainer {
     max-height: 300px;
-    overflow-y: auto;   /* Barra de rolagem vertical */
-    overflow-x: auto;   /* Barra de rolagem horizontal */
+    overflow-y: auto;
+    overflow-x: auto;
     border: 1px solid #dee2e6;
     border-radius: 4px;
 }
-/* Faz com que a tabela dentro do container de rolagem não tenha um layout fixo,
-   permitindo que as colunas se ajustem ao conteúdo. */
 #imeiTableContainer table {
     table-layout: auto;
-    white-space: nowrap; /* Impede que o texto nas células quebre a linha */
+    white-space: nowrap;
 }
-
 
 .col-solucao { width: 30%; }
 .col-foto { width: 120px; text-align: center; }
@@ -196,4 +193,62 @@ tbody tr:nth-child(odd) { background-color: #f8f9fa; }
 .info-item input {
     background-color: #fff;
     border: 1px solid #ced4da;
+}
+
+/* Estilos para o Dashboard */
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5em;
+    margin-bottom: 2em;
+}
+.card {
+    background-color: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+}
+.card h3 {
+    margin-top: 0;
+    font-size: 1em;
+    color: #6c757d;
+}
+.card p {
+    font-size: 2.5em;
+    font-weight: bold;
+    margin-bottom: 0;
+    color: #343a40;
+}
+/* Cores para os cartões */
+.card.card-open p { color: #dc3545; }
+.card.card-progress p { color: #007bff; }
+.card.card-waiting p { color: #ffc107; }
+.card.card-closed p { color: #28a745; }
+.card.card-canceled p { color: #6c757d; }
+.card.card-users p { color: #17a2b8; }
+
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.5em;
+    margin-bottom: 2em;
+}
+.chart-container {
+    background-color: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.recent-tickets {
+    background-color: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+@media (max-width: 992px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
 }
