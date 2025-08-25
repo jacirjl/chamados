@@ -76,8 +76,11 @@ def index():
         return redirect(url_for('dashboard'))
 
     db = get_db()
-    equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-                              (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
+    # CORREÇÃO AQUI: O filtro de situação foi removido.
+    equipamentos = db.execute(
+        'SELECT * FROM equipamentos WHERE municipio = ?',
+        (g.user['municipio'],)
+    ).fetchall()
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
 
@@ -96,8 +99,11 @@ def abrir_chamado_admin():
 
     equipamentos = []
     if municipio_selecionado:
-        equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-                                  (municipio_selecionado, 'Perdido', 'Roubado', 'Danificado')).fetchall()
+        # CORREÇÃO AQUI: O filtro de situação foi removido.
+        equipamentos = db.execute(
+            'SELECT * FROM equipamentos WHERE municipio = ?',
+            (municipio_selecionado,)
+        ).fetchall()
 
     db.close()
     return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
@@ -203,8 +209,7 @@ def submit_chamado():
 def meus_chamados():
     db = get_db()
     status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
-    tipos_problema_options = db.execute(
-        'SELECT * FROM tipos_problema ORDER BY nome').fetchall()  # Necessário para o form de edição do usuário
+    tipos_problema_options = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     status_filter_id = request.args.get('status', None, type=int)
 
     base_query = """
@@ -238,10 +243,9 @@ def meus_chamados():
                                chamados_atribuidos=chamados_atribuidos,
                                chamados_gerais=chamados_gerais,
                                status_options=status_options,
-                               tipos_problema_options=tipos_problema_options,  # Passando para o admin também
+                               tipos_problema_options=tipos_problema_options,
                                status_filter_id=status_filter_id)
     else:
-        # Lógica para usuário simples (com filtro)
         params = [g.user['email']]
         query_conditions = " WHERE c.solicitante_email = ?"
         if status_filter_id:
@@ -265,36 +269,30 @@ def display_image(filename):
 @login_required
 def update_chamado(chamado_id):
     db = get_db()
-    # Pega o chamado atual para verificar o status e o dono
     chamado_atual = db.execute("""
         SELECT c.solicitante_email, s.nome as status_nome 
         FROM chamados c JOIN status s ON c.status_id = s.id 
         WHERE c.id = ?
     """, (chamado_id,)).fetchone()
 
-    # Se o chamado não existir
     if chamado_atual is None:
         flash('Chamado não encontrado.', 'danger')
         return redirect(url_for('meus_chamados'))
 
-    # Se o usuário não for admin E não for o dono do chamado, bloqueia
     if not g.user['is_admin'] and chamado_atual['solicitante_email'] != g.user['email']:
         flash('Você não tem permissão para alterar este chamado.', 'danger')
         return redirect(url_for('meus_chamados'))
 
     if g.user['is_admin']:
-        # Admin pode alterar status e solução
         novo_status_id = request.form.get('status')
         nova_solucao = request.form.get('solucao')
         db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
                    (novo_status_id, nova_solucao, chamado_id))
     else:
-        # Usuário comum só pode alterar se o status for 'Aberto'
         if chamado_atual['status_nome'] != 'Aberto':
             flash('Não é possível alterar um chamado que não está com o status "Aberto".', 'danger')
             return redirect(url_for('meus_chamados'))
 
-        # Campos que o usuário comum pode alterar
         novo_tipo_problema_id = request.form.get('tipo_problema')
         novas_observacoes = request.form.get('observacoes')
         db.execute('UPDATE chamados SET tipo_problema_id = ?, observacoes = ? WHERE id = ?',
