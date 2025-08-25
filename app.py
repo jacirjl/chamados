@@ -1,5 +1,3 @@
-# app.py
-
 import os
 import sqlite3
 from datetime import datetime
@@ -78,11 +76,8 @@ def index():
         return redirect(url_for('dashboard'))
 
     db = get_db()
-    # ALTERAÇÃO AQUI: Removemos o filtro de situação
-    equipamentos = db.execute(
-        'SELECT * FROM equipamentos WHERE municipio = ?',
-        (g.user['municipio'],)
-    ).fetchall()
+    equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+                              (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
 
@@ -101,11 +96,8 @@ def abrir_chamado_admin():
 
     equipamentos = []
     if municipio_selecionado:
-        # ALTERAÇÃO AQUI: Removemos o filtro de situação
-        equipamentos = db.execute(
-            'SELECT * FROM equipamentos WHERE municipio = ?',
-            (municipio_selecionado,)
-        ).fetchall()
+        equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
+                                  (municipio_selecionado, 'Perdido', 'Roubado', 'Danificado')).fetchall()
 
     db.close()
     return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
@@ -211,11 +203,13 @@ def submit_chamado():
 def meus_chamados():
     db = get_db()
     status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
+    tipos_problema_options = db.execute(
+        'SELECT * FROM tipos_problema ORDER BY nome').fetchall()  # Necessário para o form de edição do usuário
     status_filter_id = request.args.get('status', None, type=int)
 
     base_query = """
         SELECT c.id, c.timestamp, c.municipio, c.solicitante_email, c.smartphone_imei, 
-               c.observacoes, c.foto, c.solucao, c.status_id, c.admin_responsavel_id,
+               c.observacoes, c.foto, c.solucao, c.status_id, c.tipo_problema_id, c.admin_responsavel_id,
                s.nome as status_nome,
                tp.nome as tipo_problema_nome
         FROM chamados c
@@ -244,8 +238,10 @@ def meus_chamados():
                                chamados_atribuidos=chamados_atribuidos,
                                chamados_gerais=chamados_gerais,
                                status_options=status_options,
+                               tipos_problema_options=tipos_problema_options,  # Passando para o admin também
                                status_filter_id=status_filter_id)
     else:
+        # Lógica para usuário simples (com filtro)
         params = [g.user['email']]
         query_conditions = " WHERE c.solicitante_email = ?"
         if status_filter_id:
@@ -256,7 +252,7 @@ def meus_chamados():
         todos_chamados = db.execute(query, tuple(params)).fetchall()
         db.close()
         return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options,
-                               status_filter_id=status_filter_id)
+                               tipos_problema_options=tipos_problema_options, status_filter_id=status_filter_id)
 
 
 @app.route('/uploads/<path:filename>')
@@ -268,11 +264,42 @@ def display_image(filename):
 @app.route('/chamado/update/<int:chamado_id>', methods=['POST'])
 @login_required
 def update_chamado(chamado_id):
-    novo_status_id = request.form.get('status')
-    nova_solucao = request.form.get('solucao')
     db = get_db()
-    db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
-               (novo_status_id, nova_solucao, chamado_id))
+    # Pega o chamado atual para verificar o status e o dono
+    chamado_atual = db.execute("""
+        SELECT c.solicitante_email, s.nome as status_nome 
+        FROM chamados c JOIN status s ON c.status_id = s.id 
+        WHERE c.id = ?
+    """, (chamado_id,)).fetchone()
+
+    # Se o chamado não existir
+    if chamado_atual is None:
+        flash('Chamado não encontrado.', 'danger')
+        return redirect(url_for('meus_chamados'))
+
+    # Se o usuário não for admin E não for o dono do chamado, bloqueia
+    if not g.user['is_admin'] and chamado_atual['solicitante_email'] != g.user['email']:
+        flash('Você não tem permissão para alterar este chamado.', 'danger')
+        return redirect(url_for('meus_chamados'))
+
+    if g.user['is_admin']:
+        # Admin pode alterar status e solução
+        novo_status_id = request.form.get('status')
+        nova_solucao = request.form.get('solucao')
+        db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
+                   (novo_status_id, nova_solucao, chamado_id))
+    else:
+        # Usuário comum só pode alterar se o status for 'Aberto'
+        if chamado_atual['status_nome'] != 'Aberto':
+            flash('Não é possível alterar um chamado que não está com o status "Aberto".', 'danger')
+            return redirect(url_for('meus_chamados'))
+
+        # Campos que o usuário comum pode alterar
+        novo_tipo_problema_id = request.form.get('tipo_problema')
+        novas_observacoes = request.form.get('observacoes')
+        db.execute('UPDATE chamados SET tipo_problema_id = ?, observacoes = ? WHERE id = ?',
+                   (novo_tipo_problema_id, novas_observacoes, chamado_id))
+
     db.commit()
     db.close()
     flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')

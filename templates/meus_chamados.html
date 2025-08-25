@@ -20,7 +20,7 @@
         <div class="admin-chamados-section">
             <h2>Meus Chamados Atribuídos</h2>
 
-            <form method="get" class="filter-form">
+            <form method="get" action="{{ url_for('meus_chamados') }}" class="filter-form">
                 <label for="status">Filtrar por Status:</label>
                 <select name="status" id="status" onchange="this.form.submit()">
                     <option value="">-- Todos os Status --</option>
@@ -98,7 +98,7 @@
         </div>
 
     {% else %}
-        <form method="get" class="filter-form">
+        <form method="get" action="{{ url_for('meus_chamados') }}" class="filter-form">
             <label for="status">Filtrar por Status:</label>
             <select name="status" id="status" onchange="this.form.submit()">
                 <option value="">-- Todos os Status --</option>
@@ -111,7 +111,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Data</th><th>Município</th><th>Problema</th><th>Equipamento</th><th>Status</th><th class="col-solucao">Solução</th><th class="col-foto">Foto</th><th class="col-acao">Ação</th>
+                        <th>Data</th><th>Município</th><th>Problema</th><th>Equipamento</th><th>Observações</th><th>Status</th><th class="col-solucao">Solução</th><th class="col-foto">Foto</th><th class="col-acao">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -120,20 +120,29 @@
                       <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
                         <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
                         <td>{{ chamado.municipio }}</td>
-                        <td>{{ chamado.tipo_problema_nome }}</td>
-                        <td>{{ chamado.smartphone_imei }}</td>
 
                         {% if chamado.status_nome == 'Aberto' %}
                             <td>
-                                <select name="status">
-                                    {% for option in status_options %}<option value="{{ option.id }}" {% if option.id == chamado.status_id %}selected{% endif %}>{{ option.nome }}</option>{% endfor %}
+                                <select name="tipo_problema">
+                                    {% for tipo in tipos_problema_options %}
+                                        <option value="{{ tipo.id }}" {% if tipo.id == chamado.tipo_problema_id %}selected{% endif %}>
+                                            {{ tipo.nome }}
+                                        </option>
+                                    {% endfor %}
                                 </select>
                             </td>
-                            <td class="col-solucao"><textarea name="solucao" rows="3" placeholder="Digite a solução...">{{ chamado.solucao or '' }}</textarea></td>
+                            <td>{{ chamado.smartphone_imei }}</td>
+                            <td class="col-solucao">
+                                <textarea name="observacoes" rows="3">{{ chamado.observacoes }}</textarea>
+                            </td>
                         {% else %}
-                            <td>{{ chamado.status_nome }}</td>
-                            <td class="col-solucao">{{ chamado.solucao or 'Não informada' }}</td>
+                            <td>{{ chamado.tipo_problema_nome }}</td>
+                            <td>{{ chamado.smartphone_imei }}</td>
+                            <td class="col-solucao">{{ chamado.observacoes }}</td>
                         {% endif %}
+
+                        <td>{{ chamado.status_nome }}</td>
+                        <td class="col-solucao">{{ chamado.solucao or 'Não informada' }}</td>
 
                         <td class="col-foto">
                             {% if chamado.foto %}<a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank"><img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto" width="100"></a>{% else %}Sem anexo{% endif %}
@@ -156,7 +165,10 @@
     {% endif %}
 </div>
 
+{% if not user.is_admin %}
 <div style="text-align: center; margin-top: 2em;">
     <a href="{{ url_for('index') }}" class="back-button">Abrir um Novo Chamado</a>
 </div>
+{% endif %}
+
 {% endblock %}
