@@ -78,8 +78,11 @@ def index():
         return redirect(url_for('dashboard'))
 
     db = get_db()
-    equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-                              (g.user['municipio'], 'Perdido', 'Roubado', 'Danificado')).fetchall()
+    # ALTERAÇÃO AQUI: Removemos o filtro de situação
+    equipamentos = db.execute(
+        'SELECT * FROM equipamentos WHERE municipio = ?',
+        (g.user['municipio'],)
+    ).fetchall()
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
 
@@ -98,8 +101,11 @@ def abrir_chamado_admin():
 
     equipamentos = []
     if municipio_selecionado:
-        equipamentos = db.execute('SELECT * FROM equipamentos WHERE municipio = ? AND situacao NOT IN (?, ?, ?)',
-                                  (municipio_selecionado, 'Perdido', 'Roubado', 'Danificado')).fetchall()
+        # ALTERAÇÃO AQUI: Removemos o filtro de situação
+        equipamentos = db.execute(
+            'SELECT * FROM equipamentos WHERE municipio = ?',
+            (municipio_selecionado,)
+        ).fetchall()
 
     db.close()
     return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
@@ -205,12 +211,11 @@ def submit_chamado():
 def meus_chamados():
     db = get_db()
     status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
-
-    # Pega o filtro da URL, se existir (ex: /meus_chamados?status=2)
     status_filter_id = request.args.get('status', None, type=int)
 
-    query = """
-        SELECT c.id, c.timestamp, c.municipio, c.smartphone_imei, c.observacoes, c.foto, c.solucao, c.status_id,
+    base_query = """
+        SELECT c.id, c.timestamp, c.municipio, c.solicitante_email, c.smartphone_imei, 
+               c.observacoes, c.foto, c.solucao, c.status_id, c.admin_responsavel_id,
                s.nome as status_nome,
                tp.nome as tipo_problema_nome
         FROM chamados c
@@ -218,31 +223,40 @@ def meus_chamados():
         JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
     """
 
-    params = []
-    conditions = []
+    if g.user['is_admin']:
+        status_aberto_id_row = db.execute("SELECT id FROM status WHERE nome = 'Aberto'").fetchone()
+        status_aberto_id = status_aberto_id_row['id'] if status_aberto_id_row else 1
 
-    # Adiciona filtro por usuário (se não for admin)
-    if not g.user['is_admin']:
-        conditions.append("c.solicitante_email = ?")
-        params.append(g.user['email'])
+        params_atribuidos = [g.user['id']]
+        query_atribuidos_conditions = " WHERE c.admin_responsavel_id = ?"
+        if status_filter_id:
+            query_atribuidos_conditions += " AND c.status_id = ?"
+            params_atribuidos.append(status_filter_id)
 
-    # Adiciona filtro por status (se selecionado na URL)
-    if status_filter_id:
-        conditions.append("c.status_id = ?")
-        params.append(status_filter_id)
+        query_atribuidos = base_query + query_atribuidos_conditions + " ORDER BY c.timestamp DESC"
+        chamados_atribuidos = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
 
-    # Constrói a cláusula WHERE se houver condições
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        query_gerais = f"{base_query} WHERE c.admin_responsavel_id IS NULL AND c.status_id = ? ORDER BY c.timestamp DESC"
+        chamados_gerais = db.execute(query_gerais, (status_aberto_id,)).fetchall()
 
-    query += " ORDER BY c.timestamp DESC"
+        db.close()
+        return render_template('meus_chamados.html',
+                               chamados_atribuidos=chamados_atribuidos,
+                               chamados_gerais=chamados_gerais,
+                               status_options=status_options,
+                               status_filter_id=status_filter_id)
+    else:
+        params = [g.user['email']]
+        query_conditions = " WHERE c.solicitante_email = ?"
+        if status_filter_id:
+            query_conditions += " AND c.status_id = ?"
+            params.append(status_filter_id)
 
-    todos_chamados = db.execute(query, tuple(params)).fetchall()
-    db.close()
-
-    # Passa o filtro de volta para o template para que ele possa manter o dropdown selecionado
-    return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options,
-                           status_filter_id=status_filter_id)
+        query = base_query + query_conditions + " ORDER BY c.timestamp DESC"
+        todos_chamados = db.execute(query, tuple(params)).fetchall()
+        db.close()
+        return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options,
+                               status_filter_id=status_filter_id)
 
 
 @app.route('/uploads/<path:filename>')
@@ -262,6 +276,26 @@ def update_chamado(chamado_id):
     db.commit()
     db.close()
     flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')
+    return redirect(url_for('meus_chamados'))
+
+
+@app.route('/chamado/capturar/<int:chamado_id>', methods=['POST'])
+@login_required
+@admin_required
+def capturar_chamado(chamado_id):
+    db = get_db()
+    status_em_andamento = db.execute("SELECT id FROM status WHERE nome = 'Em Andamento'").fetchone()
+    if not status_em_andamento:
+        flash('Status "Em Andamento" não encontrado no sistema.', 'danger')
+        return redirect(url_for('meus_chamados'))
+
+    db.execute(
+        'UPDATE chamados SET admin_responsavel_id = ?, status_id = ? WHERE id = ?',
+        (g.user['id'], status_em_andamento['id'], chamado_id)
+    )
+    db.commit()
+    db.close()
+    flash(f'Chamado #{chamado_id} capturado com sucesso!', 'success')
     return redirect(url_for('meus_chamados'))
 
 

@@ -16,74 +16,143 @@
         {% endif %}
     {% endwith %}
 
-    <form method="get" class="filter-form">
-        <label for="status">Filtrar por Status:</label>
-        <select name="status" id="status" onchange="this.form.submit()">
-            <option value="">-- Todos os Status --</option>
-            {% for option in status_options %}
-                <option value="{{ option.id }}" {% if option.id == status_filter_id %}selected{% endif %}>
-                    {{ option.nome }}
-                </option>
-            {% endfor %}
-        </select>
-        <a href="{{ url_for('meus_chamados') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
-    </form>
+    {% if user.is_admin %}
+        <div class="admin-chamados-section">
+            <h2>Meus Chamados Atribuídos</h2>
 
-    {% if chamados %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Data</th>
-                    <th>Município</th>
-                    <th>Problema</th>
-                    <th>Equipamento (IMEI)</th>
-                    <th>Status</th>
-                    <th class="col-solucao">Solução</th>
-                    <th class="col-foto">Foto</th>
-                    <th class="col-acao">Ação</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for chamado in chamados %}
-                <tr>
-                  <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
-                    <td>#{{ chamado.id }}</td>
-                    <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
-                    <td>{{ chamado.municipio }}</td>
-                    <td>{{ chamado.tipo_problema_nome }}</td>
-                    <td>{{ chamado.smartphone_imei }}</td>
-                    <td>
-                        <select name="status">
-                            {% for option in status_options %}
-                                <option value="{{ option.id }}" {% if option.id == chamado.status_id %}selected{% endif %}>
-                                    {{ option.nome }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </td>
-                    <td class="col-solucao">
-                        <textarea name="solucao" rows="3" placeholder="Digite a solução aqui...">{{ chamado.solucao or '' }}</textarea>
-                    </td>
-                    <td class="col-foto">
-                        {% if chamado.foto %}
-                            <a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank">
-                                <img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto do chamado" width="100">
-                            </a>
-                        {% else %}
-                            Sem anexo
-                        {% endif %}
-                    </td>
-                    <td class="col-acao">
-                        <button type="submit">Salvar</button>
-                    </td>
-                  </form>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <form method="get" class="filter-form">
+                <label for="status">Filtrar por Status:</label>
+                <select name="status" id="status" onchange="this.form.submit()">
+                    <option value="">-- Todos os Status --</option>
+                    {% for option in status_options %}
+                        <option value="{{ option.id }}" {% if option.id == status_filter_id %}selected{% endif %}>
+                            {{ option.nome }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <a href="{{ url_for('meus_chamados') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
+            </form>
+
+            {% if chamados_atribuidos %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Data</th><th>Município</th><th>Problema</th><th>Equipamento</th><th>Status</th><th class="col-solucao">Solução</th><th class="col-foto">Foto</th><th class="col-acao">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for chamado in chamados_atribuidos %}
+                        <tr>
+                          <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
+                            <td>#{{ chamado.id }}</td><td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td><td>{{ chamado.municipio }}</td>
+                            <td>{{ chamado.tipo_problema_nome }}</td><td>{{ chamado.smartphone_imei }}</td>
+                            <td>
+                                <select name="status">
+                                    {% for option in status_options %}<option value="{{ option.id }}" {% if option.id == chamado.status_id %}selected{% endif %}>{{ option.nome }}</option>{% endfor %}
+                                </select>
+                            </td>
+                            <td class="col-solucao"><textarea name="solucao" rows="3" placeholder="Digite a solução...">{{ chamado.solucao or '' }}</textarea></td>
+                            <td class="col-foto">
+                                {% if chamado.foto %}<a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank"><img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto" width="100"></a>
+                                {% else %}Sem anexo{% endif %}
+                            </td>
+                            <td class="col-acao"><button type="submit">Salvar</button></td>
+                          </form>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Você não tem nenhum chamado atribuído no momento (ou nenhum que corresponda ao filtro).</p>
+            {% endif %}
+        </div>
+
+        <hr>
+
+        <div class="admin-chamados-section">
+            <h2>Chamados Abertos (Geral)</h2>
+            {% if chamados_gerais %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Data</th><th>Solicitante</th><th>Município</th><th>Problema</th><th>Equipamento</th><th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for chamado in chamados_gerais %}
+                        <tr>
+                            <td>#{{ chamado.id }}</td><td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td><td>{{ chamado.solicitante_email }}</td>
+                            <td>{{ chamado.municipio }}</td><td>{{ chamado.tipo_problema_nome }}</td><td>{{ chamado.smartphone_imei }}</td>
+                            <td class="col-acao">
+                                <form action="{{ url_for('capturar_chamado', chamado_id=chamado.id) }}" method="post">
+                                    <button type="submit">Capturar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Não há chamados abertos aguardando atribuição.</p>
+            {% endif %}
+        </div>
+
     {% else %}
-        <p style="text-align: center; margin-top: 1em;">Nenhum chamado encontrado com os filtros selecionados.</p>
+        <form method="get" class="filter-form">
+            <label for="status">Filtrar por Status:</label>
+            <select name="status" id="status" onchange="this.form.submit()">
+                <option value="">-- Todos os Status --</option>
+                {% for option in status_options %}<option value="{{ option.id }}" {% if option.id == status_filter_id %}selected{% endif %}>{{ option.nome }}</option>{% endfor %}
+            </select>
+            <a href="{{ url_for('meus_chamados') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
+        </form>
+
+        {% if chamados %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th><th>Município</th><th>Problema</th><th>Equipamento</th><th>Status</th><th class="col-solucao">Solução</th><th class="col-foto">Foto</th><th class="col-acao">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for chamado in chamados %}
+                    <tr>
+                      <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
+                        <td>{{ chamado.timestamp.split(' ')[0].split('-') | reverse | join('/') }}</td>
+                        <td>{{ chamado.municipio }}</td>
+                        <td>{{ chamado.tipo_problema_nome }}</td>
+                        <td>{{ chamado.smartphone_imei }}</td>
+
+                        {% if chamado.status_nome == 'Aberto' %}
+                            <td>
+                                <select name="status">
+                                    {% for option in status_options %}<option value="{{ option.id }}" {% if option.id == chamado.status_id %}selected{% endif %}>{{ option.nome }}</option>{% endfor %}
+                                </select>
+                            </td>
+                            <td class="col-solucao"><textarea name="solucao" rows="3" placeholder="Digite a solução...">{{ chamado.solucao or '' }}</textarea></td>
+                        {% else %}
+                            <td>{{ chamado.status_nome }}</td>
+                            <td class="col-solucao">{{ chamado.solucao or 'Não informada' }}</td>
+                        {% endif %}
+
+                        <td class="col-foto">
+                            {% if chamado.foto %}<a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank"><img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto" width="100"></a>{% else %}Sem anexo{% endif %}
+                        </td>
+                        <td class="col-acao">
+                            {% if chamado.status_nome == 'Aberto' %}
+                                <button type="submit">Salvar</button>
+                            {% else %}
+                                <button type="submit" disabled>Salvar</button>
+                            {% endif %}
+                        </td>
+                      </form>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="text-align: center; margin-top: 1em;">Nenhum chamado encontrado.</p>
+        {% endif %}
     {% endif %}
 </div>
 

@@ -46,6 +46,7 @@ def setup_tables():
         must_reset_password BOOLEAN DEFAULT 1, is_admin BOOLEAN DEFAULT 0
     );
     ''')
+    print("Tabela 'users' criada/verificada.")
 
     cursor.execute('DROP TABLE IF EXISTS equipamentos')
     cursor.execute('''
@@ -71,8 +72,10 @@ def setup_tables():
         status_id INTEGER NOT NULL,
         foto TEXT,
         solucao TEXT,
+        admin_responsavel_id INTEGER,
         FOREIGN KEY (tipo_problema_id) REFERENCES tipos_problema (id),
-        FOREIGN KEY (status_id) REFERENCES status (id)
+        FOREIGN KEY (status_id) REFERENCES status (id),
+        FOREIGN KEY (admin_responsavel_id) REFERENCES users (id)
     );
     ''')
     print("Tabela 'chamados' atualizada/verificada.")
