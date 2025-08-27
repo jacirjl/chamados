@@ -97,15 +97,21 @@ def abrir_chamado_admin():
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
 
     equipamentos = []
+    responsavel_nome = None
     if municipio_selecionado:
         equipamentos = db.execute(
             'SELECT * FROM equipamentos WHERE municipio = ?',
             (municipio_selecionado,)
         ).fetchall()
+        responsavel_row = db.execute("SELECT responsavel FROM users WHERE municipio = ? AND is_admin = 0 LIMIT 1",
+                                     (municipio_selecionado,)).fetchone()
+        if responsavel_row:
+            responsavel_nome = responsavel_row['responsavel']
 
     db.close()
     return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
-                           todos_municipios=todos_municipios, municipio_selecionado=municipio_selecionado)
+                           todos_municipios=todos_municipios, municipio_selecionado=municipio_selecionado,
+                           responsavel_nome=responsavel_nome)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -172,12 +178,28 @@ def submit_chamado():
     imei = request.form.get('selectedDevice')
     tipo_problema_id = request.form.get('tipoProblema')
     observacoes = request.form.get('observacoes')
-
     municipio_chamado = request.form.get('municipio_selecionado') if g.user['is_admin'] else g.user['municipio']
 
     if not all([imei, tipo_problema_id, observacoes, municipio_chamado]):
         flash('Todos os campos do chamado são obrigatórios.', 'danger')
         return redirect(url_for('abrir_chamado_admin') if g.user['is_admin'] else url_for('index'))
+
+    db = get_db()
+    solicitante_final_email = g.user['email']
+
+    if g.user['is_admin']:
+        responsavel_municipio = db.execute(
+            "SELECT email FROM users WHERE municipio = ? AND is_admin = 0 LIMIT 1",
+            (municipio_chamado,)
+        ).fetchone()
+
+        if responsavel_municipio:
+            solicitante_final_email = responsavel_municipio['email']
+        else:
+            flash(
+                f"Aviso: Nenhum usuário comum encontrado para o município '{municipio_chamado}'. O chamado foi aberto em nome do administrador.",
+                "warning")
+            solicitante_final_email = g.user['email']
 
     foto_filename = None
     if 'foto' in request.files:
@@ -188,13 +210,14 @@ def submit_chamado():
             foto_filename = f"{timestamp}{extensao}"
             foto_file.save(os.path.join(UPLOAD_FOLDER, foto_filename))
 
-    db = get_db()
     status_aberto_row = db.execute('SELECT id FROM status WHERE nome = ?', ('Aberto',)).fetchone()
     status_aberto_id = status_aberto_row[0] if status_aberto_row else 1
 
     db.execute(
         'INSERT INTO chamados (solicitante_email, municipio, smartphone_imei, tipo_problema_id, observacoes, status_id, foto) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (g.user['email'], municipio_chamado, imei, tipo_problema_id, observacoes, status_aberto_id, foto_filename))
+        (solicitante_final_email, municipio_chamado, imei, tipo_problema_id, observacoes, status_aberto_id,
+         foto_filename))
+
     db.commit()
     db.close()
 
@@ -210,79 +233,87 @@ def meus_chamados():
     tipos_problema_options = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     status_filter_id = request.args.get('status', None, type=int)
 
+    # MUDANÇA: Adicionado LEFT JOIN em equipamentos para pegar a marca e modelo
     base_query = """
         SELECT c.id, c.timestamp, c.municipio, c.solicitante_email, c.smartphone_imei, 
                c.observacoes, c.foto, c.solucao, c.status_id, c.tipo_problema_id, c.admin_responsavel_id,
                s.nome as status_nome,
-               tp.nome as tipo_problema_nome
+               tp.nome as tipo_problema_nome,
+               u.responsavel as admin_responsavel_nome,
+               e.marca as equipamento_marca,
+               e.modelo as equipamento_modelo
         FROM chamados c
         JOIN status s ON c.status_id = s.id
         JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
+        LEFT JOIN users u ON c.admin_responsavel_id = u.id
+        LEFT JOIN equipamentos e ON c.smartphone_imei = e.imei1
     """
 
     if g.user['is_admin']:
-        # Busca a configuração de cores do banco de dados (NOVO)
         config_rows = db.execute("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'prazo_%'").fetchall()
         configs = {row['chave']: int(row['valor']) for row in config_rows}
         prazo_vermelho = configs.get('prazo_vermelho', 10)
         prazo_amarelo = configs.get('prazo_amarelo', 5)
 
-        # Query para chamados atribuídos (inalterada)
         params_atribuidos = [g.user['id']]
         query_atribuidos_conditions = " WHERE c.admin_responsavel_id = ?"
         if status_filter_id:
             query_atribuidos_conditions += " AND c.status_id = ?"
             params_atribuidos.append(status_filter_id)
-
         query_atribuidos = base_query + query_atribuidos_conditions + " ORDER BY c.timestamp DESC"
-        chamados_atribuidos = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
+        chamados_atribuidos_raw = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
 
-        # --- LÓGICA ATUALIZADA PARA CHAMADOS GERAIS ---
-        # 1. Busca chamados 'Aberto' E 'Finalizado' que não estão atribuídos
-        query_gerais = f"""
-            {base_query}
-            WHERE c.admin_responsavel_id IS NULL 
-            AND (s.nome = 'Aberto' OR s.nome = 'Finalizado')
-            ORDER BY s.nome, c.timestamp DESC 
-        """
-        chamados_gerais_raw = db.execute(query_gerais).fetchall()
-
-        chamados_gerais_processados = []
-        for chamado in chamados_gerais_raw:
+        chamados_atribuidos_processados = []
+        for chamado in chamados_atribuidos_raw:
             chamado_dict = dict(chamado)
-            # Cor Padrão Verde (Bootstrap 'success')
             chamado_dict['cor_borda'] = 'success'
-
-            # 2. Aplica a lógica de cores apenas para chamados 'Aberto'
-            if chamado_dict['status_nome'] == 'Aberto':
+            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
                 try:
                     data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
                     dias_aberto = (datetime.now() - data_abertura).days
-
                     if dias_aberto > prazo_vermelho:
-                        chamado_dict['cor_borda'] = 'danger'  # Vermelho
+                        chamado_dict['cor_borda'] = 'danger'
                     elif dias_aberto > prazo_amarelo:
-                        chamado_dict['cor_borda'] = 'warning'  # Amarelo
+                        chamado_dict['cor_borda'] = 'warning'
                 except (ValueError, TypeError):
-                    chamado_dict['cor_borda'] = 'secondary'  # Cor neutra para erro de data
+                    chamado_dict['cor_borda'] = 'secondary'
+            chamados_atribuidos_processados.append(chamado_dict)
 
-            chamados_gerais_processados.append(chamado_dict)
+        query_outros = f"""
+            {base_query}
+            WHERE (c.admin_responsavel_id IS NULL OR c.admin_responsavel_id != ?)
+            AND s.nome NOT IN ('Finalizado', 'Cancelado')
+            ORDER BY c.timestamp DESC 
+        """
+        outros_chamados_raw = db.execute(query_outros, (g.user['id'],)).fetchall()
+        outros_chamados_processados = []
+        for chamado in outros_chamados_raw:
+            chamado_dict = dict(chamado)
+            chamado_dict['cor_borda'] = 'success'
+            try:
+                data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                dias_aberto = (datetime.now() - data_abertura).days
+                if dias_aberto > prazo_vermelho:
+                    chamado_dict['cor_borda'] = 'danger'
+                elif dias_aberto > prazo_amarelo:
+                    chamado_dict['cor_borda'] = 'warning'
+            except (ValueError, TypeError):
+                chamado_dict['cor_borda'] = 'secondary'
+            outros_chamados_processados.append(chamado_dict)
 
         db.close()
         return render_template('meus_chamados.html',
-                               chamados_atribuidos=chamados_atribuidos,
-                               chamados_gerais=chamados_gerais_processados,  # Passa a lista processada
+                               chamados_atribuidos=chamados_atribuidos_processados,
+                               outros_chamados=outros_chamados_processados,
                                status_options=status_options,
                                tipos_problema_options=tipos_problema_options,
                                status_filter_id=status_filter_id)
     else:
-        # Lógica para usuário comum (inalterada)
         params = [g.user['email']]
         query_conditions = " WHERE c.solicitante_email = ?"
         if status_filter_id:
             query_conditions += " AND c.status_id = ?"
             params.append(status_filter_id)
-
         query = base_query + query_conditions + " ORDER BY c.timestamp DESC"
         todos_chamados = db.execute(query, tuple(params)).fetchall()
         db.close()
@@ -300,28 +331,39 @@ def display_image(filename):
 @login_required
 def update_chamado(chamado_id):
     db = get_db()
-    chamado_atual = db.execute("""
-        SELECT c.solicitante_email, s.nome as status_nome 
-        FROM chamados c JOIN status s ON c.status_id = s.id 
-        WHERE c.id = ?
-    """, (chamado_id,)).fetchone()
+    chamado_info = db.execute("SELECT solicitante_email, status_id, solucao FROM chamados WHERE id = ?",
+                              (chamado_id,)).fetchone()
 
-    if chamado_atual is None:
+    if chamado_info is None:
         flash('Chamado não encontrado.', 'danger')
+        db.close()
         return redirect(url_for('meus_chamados'))
 
-    if not g.user['is_admin'] and chamado_atual['solicitante_email'] != g.user['email']:
+    if not g.user['is_admin'] and chamado_info['solicitante_email'] != g.user['email']:
         flash('Você não tem permissão para alterar este chamado.', 'danger')
+        db.close()
         return redirect(url_for('meus_chamados'))
 
     if g.user['is_admin']:
         novo_status_id = request.form.get('status')
-        nova_solucao = request.form.get('solucao')
+        nova_adicao_solucao = request.form.get('nova_solucao', '').strip()
+        solucao_final = chamado_info['solucao'] or ''
+
+        if nova_adicao_solucao:
+            timestamp_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+            autor = g.user['responsavel']
+            nova_entrada = f"[{timestamp_atual} - {autor}]:\n{nova_adicao_solucao}\n"
+            separador = "-" * 50 + "\n"
+            solucao_final = nova_entrada + separador + solucao_final
+
         db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
-                   (novo_status_id, nova_solucao, chamado_id))
+                   (novo_status_id, solucao_final, chamado_id))
     else:
-        if chamado_atual['status_nome'] != 'Aberto':
+        status_atual_nome = db.execute("SELECT nome FROM status WHERE id = ?", (chamado_info['status_id'],)).fetchone()[
+            'nome']
+        if status_atual_nome != 'Aberto':
             flash('Não é possível alterar um chamado que não está com o status "Aberto".', 'danger')
+            db.close()
             return redirect(url_for('meus_chamados'))
 
         novo_tipo_problema_id = request.form.get('tipo_problema')
@@ -343,6 +385,7 @@ def capturar_chamado(chamado_id):
     status_em_andamento = db.execute("SELECT id FROM status WHERE nome = 'Em Andamento'").fetchone()
     if not status_em_andamento:
         flash('Status "Em Andamento" não encontrado no sistema.', 'danger')
+        db.close()
         return redirect(url_for('meus_chamados'))
 
     db.execute(
@@ -356,6 +399,8 @@ def capturar_chamado(chamado_id):
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+# (O restante das rotas permanece inalterado)
+
 @app.route('/dashboard')
 @login_required
 @admin_required
@@ -502,7 +547,6 @@ def gerenciar_cadastros():
     return render_template('gerenciar_cadastros.html', status_list=status_list, tipos_problema_list=tipos_problema_list)
 
 
-# --- ROTA NOVA PARA CONFIGURAÇÕES ---
 @app.route('/admin/configuracoes', methods=['GET', 'POST'])
 @login_required
 @admin_required

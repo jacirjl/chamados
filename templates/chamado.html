@@ -1,117 +1,264 @@
 {% extends "layout.html" %}
 
-{% block title %}Abrir Chamado{% endblock %}
+{% block title %}Abertura de Chamado Técnico{% endblock %}
 
 {% block content %}
-<h1>Abertura de Chamado Técnico</h1>
+<div class="form-container">
+    <h1>Abertura de Chamado Técnico</h1>
 
-<div class="user-info">
-    <div class="info-item">
-        <label>Solicitante:</label>
-        <input type="text" value="{{ user.responsavel }}" disabled>
-    </div>
-    <div class="info-item">
-        <label>E-mail:</label>
-        <input type="email" value="{{ user.email }}" disabled>
-    </div>
-    <div class="info-item">
-        <label>Município do Chamado:</label>
-        <input type="text" value="{{ municipio_selecionado or user.municipio }}" disabled>
-    </div>
-</div>
+    {% set solicitante_final = responsavel_do_municipio or user %}
 
-{% if user.is_admin %}
-<div class="municipio-selector">
-    <form method="get" action="{{ url_for('abrir_chamado_admin') }}">
-        <label for="municipio">Selecione um Município para Abrir o Chamado:</label>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <select name="municipio" id="municipio" required onchange="this.form.submit()">
-                <option value="">-- Escolha um município --</option>
-                {% for m in todos_municipios %}
-                    <option value="{{ m }}" {% if m == municipio_selecionado %}selected{% endif %}>{{ m }}</option>
+    <div class="user-info">
+        <div class="info-item">
+            <label>Solicitante:</label>
+            <input type="text" value="{{ solicitante_final.responsavel }}" readonly>
+        </div>
+        <div class="info-item">
+            <label>E-mail:</label>
+            <input type="email" value="{{ solicitante_final.email }}" readonly>
+        </div>
+        <div class="info-item">
+            <label>Município do Chamado:</label>
+            <input type="text" value="{{ municipio_selecionado or user.municipio }}" readonly>
+        </div>
+    </div>
+
+    {% if user.is_admin %}
+    <div class="municipio-selector">
+        <form method="get" action="{{ url_for('abrir_chamado_admin') }}">
+            <label for="municipio">Selecione um Município para Abrir o Chamado:</label>
+            <div class="input-group">
+                <select name="municipio" id="municipio" required onchange="this.form.submit()">
+                    <option value="">-- Escolha um município --</option>
+                    {% for m in todos_municipios %}
+                        <option value="{{ m }}" {% if m == municipio_selecionado %}selected{% endif %}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+                </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <form class="chamado-form" method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data">
+        {% if user.is_admin and municipio_selecionado %}
+            <input type="hidden" name="municipio_selecionado" value="{{ municipio_selecionado }}">
+        {% endif %}
+
+        <h2>Equipamentos</h2>
+        <p class="subtitle">Selecione o dispositivo com problema</p>
+        <div class="table-container">
+            {% if equipamentos %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Selecionar</th>
+                            <th>Patrimônio</th>
+                            <th>IMEI 1</th>
+                            <th>Marca</th>
+                            <th>Modelo</th>
+                            <th>Nº de Série</th>
+                            <th>Local de Uso</th>
+                            <th>Situação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for equipamento in equipamentos %}
+                        <tr>
+                            <td><input type="radio" name="selectedDevice" value="{{ equipamento.imei1 }}" required></td>
+                            <td>{{ equipamento.patrimonio }}</td>
+                            <td>{{ equipamento.imei1 }}</td>
+                            <td>{{ equipamento.marca }}</td>
+                            <td>{{ equipamento.modelo }}</td>
+                            <td>{{ equipamento.numeroDeSerie }}</td>
+                            <td>{{ equipamento.localdeUso }}</td>
+                            <td>{{ equipamento.situacao }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                {% if user.is_admin and not municipio_selecionado %}
+                    <p class="info-message">Por favor, selecione um município acima para ver os equipamentos.</p>
+                {% else %}
+                    <p class="info-message">Nenhum equipamento disponível encontrado para este município.</p>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <hr>
+        <h2>Informações do Chamado</h2>
+        <div class="form-group">
+            <label for="tipoProblema">Tipo de Chamado/Problema:</label>
+            <select id="tipoProblema" name="tipoProblema" required>
+                <option value="">-- Selecione uma Categoria --</option>
+                {% for tipo in tipos_problema %}
+                <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="button-link" style="padding: 0.5em 1em;">Buscar Equipamentos</button>
+        </div>
+        <div class="form-group">
+            <label for="observacoes">Detalhamento do problema/solicitação:</label>
+            <textarea id="observacoes" name="observacoes" rows="5" placeholder="Descreva o problema ou a solicitação com o máximo de detalhes..." required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="foto">Anexar Foto (Opcional):</label>
+            <input type="file" id="foto" name="foto" accept="image/png, image/jpeg">
+        </div>
+
+        <div class="submit-group">
+            <button type="submit" {% if user.is_admin and not municipio_selecionado %}disabled{% endif %}>Registrar Chamado</button>
         </div>
     </form>
 </div>
-{% endif %}
+{% endblock %}
 
-<form method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data">
-    {% if user.is_admin and municipio_selecionado %}
-        <input type="hidden" name="municipio_selecionado" value="{{ municipio_selecionado }}">
-    {% endif %}
-
-    <h2>Equipamentos</h2>
-    <h3>Selecione o dispositivo</h3>
-    <div id="imeiTableContainer">
-        {% if equipamentos %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Selecionar</th>
-                        <th>Patrimônio</th>
-                        <th>IMEI 1</th>
-                        <th>IMEI 2</th>
-                        <th>Marca</th>
-                        <th>Modelo</th>
-                        <th>Nº de Série</th>
-                        <th>Local de Uso</th>
-                        <th>Situação</th>
-                        <th>Data da Entrega</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for equipamento in equipamentos %}
-                    <tr>
-                        <td><input type="radio" name="selectedDevice" value="{{ equipamento.imei1 }}" required></td>
-                        <td>{{ equipamento.patrimonio }}</td>
-                        <td>{{ equipamento.imei1 }}</td>
-                        <td>{{ equipamento.imei2 }}</td>
-                        <td>{{ equipamento.marca }}</td>
-                        <td>{{ equipamento.modelo }}</td>
-                        <td>{{ equipamento.numeroDeSerie }}</td>
-                        <td>{{ equipamento.localdeUso }}</td>
-                        <td>{{ equipamento.situacao }}</td>
-                        <td>
-                            {% if equipamento.dataEntrega %}
-                                {{ equipamento.dataEntrega.split(' ')[0].split('-') | reverse | join('/') }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            {% if user.is_admin and not municipio_selecionado %}
-                <p style="padding: 1em;">Por favor, selecione um município acima para ver os equipamentos.</p>
-            {% else %}
-                <p style="padding: 1em;">Nenhum equipamento disponível encontrado para este município.</p>
-            {% endif %}
-        {% endif %}
-    </div>
-
-    <hr>
-    <h2>Informações do Chamado</h2>
-    <div class="form-group">
-        <label for="tipoProblema">Tipo de Chamado/Problema:</label>
-        <select id="tipoProblema" name="tipoProblema" required>
-            <option value="">-- Selecione uma Categoria --</option>
-            {% for tipo in tipos_problema %}
-            <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="form-group">
-        <label for="observacoes">Detalhamento do problema/solicitação:</label>
-        <textarea id="observacoes" name="observacoes" rows="4" placeholder="Descreva o problema ou a solicitação..." required maxlength="300"></textarea>
-    </div>
-
-    <div class="form-group">
-        <label for="foto">Anexar Foto (Opcional):</label>
-        <input type="file" id="foto" name="foto" accept="image/png, image/jpeg, image/gif">
-    </div>
-
-    <button type="submit">Registrar Chamado</button>
-</form>
+{% block scripts %}
+<style>
+    .form-container {
+        /* MUDANÇA: Formulário mais largo */
+        max-width: 1140px;
+        margin: 20px auto;
+        padding: 25px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        font-family: Arial, sans-serif;
+    }
+    h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 20px;
+    }
+    h2 {
+        color: #0056b3;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
+        margin-top: 25px;
+    }
+    .subtitle {
+        color: #666;
+        margin-top: -5px;
+        margin-bottom: 15px;
+    }
+    .user-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .info-item {
+        flex: 1;
+        min-width: 250px;
+    }
+    .info-item label, .form-group label, .municipio-selector label {
+        display: block;
+        font-weight: bold;
+        color: #555;
+        margin-bottom: 5px;
+    }
+    .info-item input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #e9ecef;
+    }
+    .municipio-selector {
+        background-color: #eef7ff;
+        padding: 15px;
+        border: 1px solid #bce8f1;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .input-group select {
+        flex-grow: 1;
+    }
+    .table-container {
+        overflow-x: auto;
+        /* MUDANÇA: Altura máxima e rolagem vertical */
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        /* MUDANÇA: Linhas mais compactas */
+        padding: 8px;
+        text-align: left;
+        font-size: 0.85rem;
+        white-space: nowrap; /* Evita que o texto quebre a linha */
+    }
+    th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+        position: sticky; /* Cabeçalho fica fixo ao rolar */
+        top: 0;
+    }
+    tbody tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    tbody tr:hover {
+        background-color: #f1f1f1;
+    }
+    td input[type="radio"] {
+        cursor: pointer;
+    }
+    .info-message {
+        padding: 1em;
+        background-color: #f9f9f9;
+        text-align: center;
+        color: #777;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    select, textarea, input[type="file"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 1rem;
+    }
+    .submit-group {
+        text-align: right;
+        margin-top: 30px;
+    }
+    button {
+        padding: 12px 25px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    button:hover {
+        background-color: #0056b3;
+    }
+    button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+    hr {
+        border: none;
+        border-top: 1px solid #eee;
+        margin: 30px 0;
+    }
+</style>
 {% endblock %}
