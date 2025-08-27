@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+
+{% block title %}Configurações de Prazos{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3">Configurar Prazos para Cores dos Chamados</h2>
+    <p class="text-muted">
+        Defina o número de dias para que os chamados em aberto mudem de cor na tela de "Meus Chamados".
+    </p>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form action="{{ url_for('gerenciar_configuracoes') }}" method="POST">
+                <div class="mb-3">
+                    <label for="prazo_amarelo" class="form-label fw-bold">
+                        <i class="fas fa-circle text-warning"></i> Amarelo (Atenção)
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">Chamado aberto há mais de</span>
+                        <input type="number" class="form-control" id="prazo_amarelo" name="prazo_amarelo"
+                               value="{{ configs.get('prazo_amarelo', 5) }}" min="1" required>
+                        <span class="input-group-text">dias</span>
+                    </div>
+                    <div class="form-text">
+                        Chamados com idade maior que este valor (e menor que o vermelho) ficarão amarelos.
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="prazo_vermelho" class="form-label fw-bold">
+                        <i class="fas fa-circle text-danger"></i> Vermelho (Urgente)
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">Chamado aberto há mais de</span>
+                        <input type="number" class="form-control" id="prazo_vermelho" name="prazo_vermelho"
+                               value="{{ configs.get('prazo_vermelho', 10) }}" min="1" required>
+                        <span class="input-group-text">dias</span>
+                    </div>
+                     <div class="form-text">
+                        Chamados com idade maior que este valor ficarão vermelhos.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-2"></i>Salvar Configurações
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -76,7 +76,6 @@ def index():
         return redirect(url_for('dashboard'))
 
     db = get_db()
-    # CORREÇÃO AQUI: O filtro de situação foi removido.
     equipamentos = db.execute(
         'SELECT * FROM equipamentos WHERE municipio = ?',
         (g.user['municipio'],)
@@ -99,7 +98,6 @@ def abrir_chamado_admin():
 
     equipamentos = []
     if municipio_selecionado:
-        # CORREÇÃO AQUI: O filtro de situação foi removido.
         equipamentos = db.execute(
             'SELECT * FROM equipamentos WHERE municipio = ?',
             (municipio_selecionado,)
@@ -223,9 +221,13 @@ def meus_chamados():
     """
 
     if g.user['is_admin']:
-        status_aberto_id_row = db.execute("SELECT id FROM status WHERE nome = 'Aberto'").fetchone()
-        status_aberto_id = status_aberto_id_row['id'] if status_aberto_id_row else 1
+        # Busca a configuração de cores do banco de dados (NOVO)
+        config_rows = db.execute("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'prazo_%'").fetchall()
+        configs = {row['chave']: int(row['valor']) for row in config_rows}
+        prazo_vermelho = configs.get('prazo_vermelho', 10)
+        prazo_amarelo = configs.get('prazo_amarelo', 5)
 
+        # Query para chamados atribuídos (inalterada)
         params_atribuidos = [g.user['id']]
         query_atribuidos_conditions = " WHERE c.admin_responsavel_id = ?"
         if status_filter_id:
@@ -235,17 +237,46 @@ def meus_chamados():
         query_atribuidos = base_query + query_atribuidos_conditions + " ORDER BY c.timestamp DESC"
         chamados_atribuidos = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
 
-        query_gerais = f"{base_query} WHERE c.admin_responsavel_id IS NULL AND c.status_id = ? ORDER BY c.timestamp DESC"
-        chamados_gerais = db.execute(query_gerais, (status_aberto_id,)).fetchall()
+        # --- LÓGICA ATUALIZADA PARA CHAMADOS GERAIS ---
+        # 1. Busca chamados 'Aberto' E 'Finalizado' que não estão atribuídos
+        query_gerais = f"""
+            {base_query}
+            WHERE c.admin_responsavel_id IS NULL 
+            AND (s.nome = 'Aberto' OR s.nome = 'Finalizado')
+            ORDER BY s.nome, c.timestamp DESC 
+        """
+        chamados_gerais_raw = db.execute(query_gerais).fetchall()
+
+        chamados_gerais_processados = []
+        for chamado in chamados_gerais_raw:
+            chamado_dict = dict(chamado)
+            # Cor Padrão Verde (Bootstrap 'success')
+            chamado_dict['cor_borda'] = 'success'
+
+            # 2. Aplica a lógica de cores apenas para chamados 'Aberto'
+            if chamado_dict['status_nome'] == 'Aberto':
+                try:
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                    dias_aberto = (datetime.now() - data_abertura).days
+
+                    if dias_aberto > prazo_vermelho:
+                        chamado_dict['cor_borda'] = 'danger'  # Vermelho
+                    elif dias_aberto > prazo_amarelo:
+                        chamado_dict['cor_borda'] = 'warning'  # Amarelo
+                except (ValueError, TypeError):
+                    chamado_dict['cor_borda'] = 'secondary'  # Cor neutra para erro de data
+
+            chamados_gerais_processados.append(chamado_dict)
 
         db.close()
         return render_template('meus_chamados.html',
                                chamados_atribuidos=chamados_atribuidos,
-                               chamados_gerais=chamados_gerais,
+                               chamados_gerais=chamados_gerais_processados,  # Passa a lista processada
                                status_options=status_options,
                                tipos_problema_options=tipos_problema_options,
                                status_filter_id=status_filter_id)
     else:
+        # Lógica para usuário comum (inalterada)
         params = [g.user['email']]
         query_conditions = " WHERE c.solicitante_email = ?"
         if status_filter_id:
@@ -469,6 +500,36 @@ def gerenciar_cadastros():
     tipos_problema_list = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
     return render_template('gerenciar_cadastros.html', status_list=status_list, tipos_problema_list=tipos_problema_list)
+
+
+# --- ROTA NOVA PARA CONFIGURAÇÕES ---
+@app.route('/admin/configuracoes', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def gerenciar_configuracoes():
+    db = get_db()
+    if request.method == 'POST':
+        prazo_vermelho = request.form.get('prazo_vermelho')
+        prazo_amarelo = request.form.get('prazo_amarelo')
+
+        if not prazo_vermelho or not prazo_amarelo or not prazo_vermelho.isdigit() or not prazo_amarelo.isdigit():
+            flash('Os prazos devem ser números inteiros positivos.', 'danger')
+        elif int(prazo_vermelho) <= int(prazo_amarelo):
+            flash('O prazo para a cor vermelha deve ser maior que o prazo para a cor amarela.', 'danger')
+        else:
+            db.execute("UPDATE configuracoes SET valor = ? WHERE chave = 'prazo_vermelho'", (prazo_vermelho,))
+            db.execute("UPDATE configuracoes SET valor = ? WHERE chave = 'prazo_amarelo'", (prazo_amarelo,))
+            db.commit()
+            flash('Configurações de prazo salvas com sucesso!', 'success')
+
+        db.close()
+        return redirect(url_for('gerenciar_configuracoes'))
+
+    config_rows = db.execute('SELECT chave, valor FROM configuracoes').fetchall()
+    configs = {row['chave']: row['valor'] for row in config_rows}
+    db.close()
+
+    return render_template('configuracoes.html', configs=configs)
 
 
 @app.route('/admin/status/add', methods=['POST'])

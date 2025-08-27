@@ -38,6 +38,15 @@ def setup_tables():
     ''')
     print("Tabela 'tipos_problema' criada/verificada.")
 
+    # --- TABELA DE CONFIGURAÇÕES (NOVA) ---
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS configuracoes (
+        chave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL
+    );
+    ''')
+    print("Tabela 'configuracoes' criada/verificada.")
+
     # --- TABELAS ANTIGAS ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
@@ -87,12 +96,18 @@ def populate_lookup_tables():
     """Popula as novas tabelas com valores padrão."""
     default_status = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
     default_problemas = ['Octostudio', 'Sistema Operacional', 'Hardware/Dispositivo', 'Dúvidas/Outros']
+    default_config = [
+        ('prazo_vermelho', '10'),
+        ('prazo_amarelo', '5')
+    ]
 
     try:
         cursor.executemany("INSERT OR IGNORE INTO status (nome) VALUES (?)", [(s,) for s in default_status])
         cursor.executemany("INSERT OR IGNORE INTO tipos_problema (nome) VALUES (?)", [(p,) for p in default_problemas])
+        # Popula as configurações padrão (NOVO)
+        cursor.executemany("INSERT OR IGNORE INTO configuracoes (chave, valor) VALUES (?, ?)", default_config)
         conn.commit()
-        print("Tabelas 'status' e 'tipos_problema' populadas com valores padrão.")
+        print("Tabelas 'status', 'tipos_problema' e 'configuracoes' populadas com valores padrão.")
     except Exception as e:
         print(f"Erro ao popular tabelas de lookup: {e}")
 
