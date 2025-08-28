@@ -287,7 +287,7 @@ def meus_chamados():
             chamado_dict['cor_borda'] = 'success'
             if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
                 try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
                     dias_aberto = (datetime.now() - data_abertura).days
                     if dias_aberto > prazo_vermelho:
                         chamado_dict['cor_borda'] = 'danger'
@@ -318,7 +318,7 @@ def meus_chamados():
             chamado_dict['cor_borda'] = 'success'
             if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
                 try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
                     dias_aberto = (datetime.now() - data_abertura).days
                     if dias_aberto > prazo_vermelho:
                         chamado_dict['cor_borda'] = 'danger'
@@ -359,7 +359,7 @@ def meus_chamados():
             chamado_dict['cor_borda'] = 'success'
             if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
                 try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
                     dias_aberto = (datetime.now() - data_abertura).days
                     if dias_aberto > prazo_vermelho:
                         chamado_dict['cor_borda'] = 'danger'
@@ -455,6 +455,7 @@ def capturar_chamado(chamado_id):
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+# MUDANÇA: Rotas de admin restauradas
 @app.route('/dashboard')
 @login_required
 @admin_required
