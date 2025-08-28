@@ -10,9 +10,12 @@
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('index') }}">Sistema de Chamados</a>
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+            <i class="fas fa-headset"></i>
+            Sistema de Chamados
+        </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -21,7 +24,7 @@
                 {% if user %}
                     {% if user.is_admin %}
                         <li class="nav-item">
-                             <a class="nav-link" href="{{ url_for('abrir_chamado_admin') }}">Abrir Chamado (Admin)</a>
+                             <a class="nav-link" href="{{ url_for('abrir_chamado_admin') }}">Abrir Chamado</a>
                         </li>
                     {% else %}
                         <li class="nav-item">
@@ -33,7 +36,7 @@
                     </li>
                 {% endif %}
             </ul>
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-center">
                 {% if user and user.is_admin %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="adminMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -72,22 +75,35 @@
     </div>
 </nav>
 
-<div class="container mt-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+<main class="container-fluid">
+    <div class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-    {% block content %}{% endblock %}
-</div>
+        {% block content %}{% endblock %}
+    </div>
+</main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<style>
+    body {
+        background-color: #f0f2f5;
+    }
+    .main-content {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+</style>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

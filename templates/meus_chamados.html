@@ -3,15 +3,43 @@
 {% block title %}Meus Chamados{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="content-container">
+
+    <div class="page-header">
+        <h2 class="section-title mb-0">Painel de Chamados</h2>
+        <form method="get" class="filter-form" action="{{ url_for('meus_chamados') }}">
+            <div class="filter-group">
+                <label for="statusFilter" class="form-label">Filtrar por Status:</label>
+                <select name="status" id="statusFilter" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Todos Status --</option>
+                    {% for status in status_options %}
+                        <option value="{{ status.id }}" {% if status.id == status_filter_id %}selected{% endif %}>
+                            {{ status.nome }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="municipioFilter" class="form-label">Filtrar por Município:</label>
+                <select name="municipio" id="municipioFilter" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Todos Municípios --</option>
+                    {% for m in municipios_options %}
+                        <option value="{{ m.municipio }}" {% if m.municipio == municipio_filter %}selected{% endif %}>
+                            {{ m.municipio }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
 
     {% if user.is_admin %}
-    <div class="mb-5">
-        <h3>Chamados Atribuídos a Mim</h3>
+    <div class="mb-5 mt-4">
+        <h3 class="subsection-title"><i class="fas fa-user-tag me-2"></i>Chamados Atribuídos a Mim</h3>
         {% if chamados_atribuidos %}
         <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle">
-                <thead class="table-light">
+            <table class="table table-bordered table-hover align-middle custom-table">
+                <thead>
                     <tr>
                         <th scope="col" style="width: 5%;">#</th>
                         <th scope="col" style="width: 15%;">Data Abertura</th>
@@ -19,12 +47,12 @@
                         <th scope="col" style="width: 20%;">Solicitante</th>
                         <th scope="col" style="width: 20%;">Problema</th>
                         <th scope="col" style="width: 15%;">Status</th>
-                        <th scope="col" style="width: 10%;">Ação</th>
+                        <th scope="col" style="width: 10%;" class="text-center">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for chamado in chamados_atribuidos %}
-                    <tr class="clickable" data-bs-toggle="collapse" data-bs-target="#detalhes-{{ chamado.id }}" aria-expanded="false" aria-controls="detalhes-{{ chamado.id }}" style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Finalizado', 'Cancelado'] else 'secondary' }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Finalizado', 'Cancelado'] else 'secondary' }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp.split(' ')[0] }}</td>
                         <td>{{ chamado.municipio }}</td>
@@ -35,8 +63,8 @@
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary w-100">
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#detalhes-{{ chamado.id }}" aria-expanded="false" aria-controls="detalhes-{{ chamado.id }}">
                                 Detalhes
                             </button>
                         </td>
@@ -44,10 +72,35 @@
                     <tr>
                         <td colspan="7" class="p-0 border-0">
                             <div class="collapse" id="detalhes-{{ chamado.id }}">
-                                <div class="card card-body bg-light">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold">Observações do solicitante:</label>
-                                        <textarea readonly class="form-control" rows="3">{{ chamado.observacoes }}</textarea>
+                                <div class="details-panel">
+                                    <div class="row">
+                                        <div class="col-lg-8">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Observações do solicitante:</label>
+                                                <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
+                                            </div>
+                                            <div class="equipment-details">
+                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
+                                                <ul>
+                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
+                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
+                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
+                                                    <li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li>
+                                                    <li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li>
+                                                    <li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            {% if chamado.foto %}
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Foto Anexada:</label><br>
+                                                <a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank">
+                                                    <img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto do Chamado" class="img-thumbnail">
+                                                </a>
+                                            </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
 
                                     {% if chamado.status_nome not in ['Finalizado', 'Cancelado'] %}
@@ -87,16 +140,16 @@
             </table>
         </div>
         {% else %}
-        <div class="alert alert-secondary">Nenhum chamado atribuído a você no momento.</div>
+        <div class="alert alert-secondary">Nenhum chamado encontrado com os filtros selecionados.</div>
         {% endif %}
     </div>
 
-    <div>
-        <h3>Outros Chamados (Não atribuídos a mim)</h3>
+    <div class="mt-4">
+        <h3 class="subsection-title"><i class="fas fa-globe-americas me-2"></i>Outros Chamados (Não atribuídos a mim)</h3>
         {% if outros_chamados %}
         <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle">
-                <thead class="table-light">
+            <table class="table table-bordered table-hover align-middle custom-table">
+                <thead>
                     <tr>
                         <th scope="col" style="width: 5%;">#</th>
                         <th scope="col" style="width: 15%;">Data Abertura</th>
@@ -104,12 +157,12 @@
                         <th scope="col" style="width: 20%;">Solicitante</th>
                         <th scope="col" style="width: 20%;">Responsável</th>
                         <th scope="col" style="width: 15%;">Status</th>
-                        <th scope="col" style="width: 10%;">Ação</th>
+                        <th scope="col" style="width: 10%;" class="text-center">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for chamado in outros_chamados %}
-                    <tr class="clickable" data-bs-toggle="collapse" data-bs-target="#geral-detalhes-{{ chamado.id }}" aria-expanded="false" aria-controls="geral-detalhes-{{ chamado.id }}" style="border-left: 5px solid var(--bs-{{ chamado.cor_borda }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_nome in ['Finalizado', 'Cancelado'] else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp.split(' ')[0] }}</td>
                         <td>{{ chamado.municipio }}</td>
@@ -122,38 +175,59 @@
                             {% endif %}
                         </td>
                         <td>
-                             <span class="badge fs-6 w-100 bg-{{ chamado.cor_borda }}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Finalizado', 'Cancelado'] %}bg-secondary{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
-                        <td>
-                            {% if not chamado.admin_responsavel_id %}
-                            <form action="{{ url_for('capturar_chamado', chamado_id=chamado.id) }}" method="POST" class="d-grid">
-                                <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-hand-paper me-1"></i>Capturar
+                        <td class="text-center">
+                            {% if not chamado.admin_responsavel_id and chamado.status_nome == 'Aberto' %}
+                            <form action="{{ url_for('capturar_chamado', chamado_id=chamado.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-success" title="Capturar Chamado">
+                                    <i class="fas fa-hand-paper"></i>
                                 </button>
                             </form>
-                            {% else %}
-                                <button class="btn btn-sm btn-outline-secondary w-100">
-                                    Ver Detalhes
-                                </button>
                             {% endif %}
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#geral-detalhes-{{ chamado.id }}" title="Ver Detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </td>
                     </tr>
                     <tr>
                         <td colspan="7" class="p-0 border-0">
                             <div class="collapse" id="geral-detalhes-{{ chamado.id }}">
-                                <div class="card card-body bg-light">
+                                <div class="details-panel">
                                     <div class="row">
-                                        <div class="col-md-6 mb-3 mb-md-0">
-                                            <label class="form-label fw-bold">Observações do solicitante:</label>
-                                            <textarea readonly class="form-control" rows="5">{{ chamado.observacoes }}</textarea>
+                                        <div class="col-lg-8">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Observações do solicitante:</label>
+                                                <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
+                                            </div>
+                                            <div class="equipment-details">
+                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
+                                                <ul>
+                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
+                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
+                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
+                                                    <li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li>
+                                                    <li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li>
+                                                    <li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li>
+                                                </ul>
+                                            </div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Histórico de Soluções:</label>
-                                            <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
+                                        <div class="col-lg-4">
+                                            {% if chamado.foto %}
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Foto Anexada:</label><br>
+                                                <a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank">
+                                                    <img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto do Chamado" class="img-thumbnail">
+                                                </a>
+                                            </div>
+                                            {% endif %}
                                         </div>
                                     </div>
+                                    <hr>
+                                    <label class="form-label fw-bold">Histórico de Soluções:</label>
+                                    <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
                                 </div>
                             </div>
                         </td>
@@ -163,29 +237,167 @@
             </table>
         </div>
         {% else %}
-        <div class="alert alert-success">Não há outros chamados ativos no momento.</div>
+        <div class="alert alert-secondary">Nenhum chamado encontrado com os filtros selecionados.</div>
         {% endif %}
     </div>
 
     {% else %}
-    <h3>Meus Chamados Registrados</h3>
-    {% if chamados %}
-        <p>Aqui será exibida a lista de chamados para usuários comuns.</p>
-    {% else %}
-        <div class="alert alert-info">Você ainda não abriu nenhum chamado.</div>
+    <div class="mt-4">
+        <h3 class="subsection-title"><i class="fas fa-ticket-alt me-2"></i>Meus Chamados Registrados</h3>
+        {% if chamados %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle custom-table">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Data Abertura</th>
+                        <th scope="col">Problema</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Responsável</th>
+                        <th scope="col" class="text-center">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for chamado in chamados %}
+                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Finalizado', 'Cancelado'] else 'secondary' }});">
+                        <td>{{ chamado.id }}</td>
+                        <td>{{ chamado.timestamp.split(' ')[0] }}</td>
+                        <td>{{ chamado.tipo_problema_nome }}</td>
+                        <td>
+                             <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Finalizado', 'Cancelado'] %}bg-secondary{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                                {{ chamado.status_nome }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if chamado.admin_responsavel_nome %}
+                                {{ chamado.admin_responsavel_nome }}
+                            {% else %}
+                                <span class="text-muted fst-italic">Aguardando...</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#user-detalhes-{{ chamado.id }}" title="Ver Detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                     <tr>
+                        <td colspan="6" class="p-0 border-0">
+                            <div class="collapse" id="user-detalhes-{{ chamado.id }}">
+                                <div class="details-panel">
+                                    <div class="row">
+                                        <div class="col-lg-8">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Observações (enviado por você):</label>
+                                                <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
+                                            </div>
+                                            <div class="equipment-details">
+                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
+                                                 <ul>
+                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
+                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
+                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            {% if chamado.foto %}
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Foto Anexada:</label><br>
+                                                <a href="{{ url_for('display_image', filename=chamado.foto) }}" target="_blank">
+                                                    <img src="{{ url_for('display_image', filename=chamado.foto) }}" alt="Foto do Chamado" class="img-thumbnail">
+                                                </a>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <label class="form-label fw-bold">Histórico de Soluções:</label>
+                                    <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhuma solução informada ainda.' }}</textarea>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="alert alert-info">Você ainda não abriu nenhum chamado ou nenhum corresponde ao filtro.</div>
+        {% endif %}
+    </div>
     {% endif %}
-    {% endif %}
-
 </div>
+{% endblock %}
 
+{% block scripts %}
 <style>
-    /* Adiciona um cursor de ponteiro para as linhas clicáveis */
-    .table .clickable {
-        cursor: pointer;
+    body { background-color: #f0f2f5; }
+    .content-container {
+        background-color: #ffffff;
+        padding: 25px 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        max-width: 1400px;
+        margin: 20px auto;
     }
-    /* Garante que o texto dentro de textareas readonly seja preservado */
-    textarea[readonly] {
-        white-space: pre-wrap;
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+    }
+    .section-title { font-size: 1.75rem; color: #333; }
+    .subsection-title {
+        font-size: 1.25rem;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #e9ecef;
+        color: #333;
+    }
+    .filter-form { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    .filter-group { display: flex; align-items: center; gap: 10px; }
+    .filter-form .form-select { min-width: 200px; }
+    .custom-table thead tr th { background-color: #343a40; color: #fff; border-color: #495057; }
+    .table-hover tbody tr:hover { background-color: #e9ecef; }
+    .details-panel {
+        background-color: #e9edf2;
+        padding: 20px;
+        border-top: 1px solid #d0d6e0;
+    }
+    .details-panel label { color: #222; }
+    .details-panel textarea[readonly] {
+        background-color: #f3f5f8;
+        border-color: #d0d6e0;
+    }
+    textarea[readonly] { white-space: pre-wrap; }
+
+    /* MUDANÇA: Estilos para a seção de detalhes do equipamento e foto */
+    .details-panel .equipment-details {
+        background-color: #f3f5f8;
+        border: 1px solid #d0d6e0;
+        border-radius: 5px;
+        padding: 15px;
+        font-size: 0.9rem;
+    }
+    .details-panel .equipment-details ul {
+        list-style-type: none;
+        padding-left: 0;
+        margin-bottom: 0;
+    }
+    .details-panel .equipment-details li {
+        padding: 3px 0;
+    }
+    .details-panel .img-thumbnail {
+        width: 100%;
+        max-width: 250px;
+        height: auto;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 </style>
 {% endblock %}

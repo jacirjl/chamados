@@ -3,72 +3,110 @@
 {% block title %}Gerenciar Cadastros{% endblock %}
 
 {% block content %}
-<h1>Gerenciar Cadastros</h1>
-<p>Nesta página você pode adicionar ou remover os tipos de problema e status que aparecem nos formulários.</p>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-            <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-    {% endif %}
-{% endwith %}
-
-<div class="management-grid">
-    <div class="management-section">
-        <h2>Tipos de Problema</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th style="width: 100px;">Ação</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for tipo in tipos_problema_list %}
-                <tr>
-                    <td>{{ tipo.nome }}</td>
-                    <td>
-                        <form action="{{ url_for('delete_tipo_problema', tipo_id=tipo.id) }}" method="post" onsubmit="return confirm('Tem certeza?');">
-                            <button type="submit" class="delete-button-small">Remover</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <form action="{{ url_for('add_tipo_problema') }}" method="post" class="add-form">
-            <input type="text" name="nome" placeholder="Nome do novo tipo" required>
-            <button type="submit">Adicionar</button>
-        </form>
+<div class="content-container">
+    <div class="page-header">
+        <h2 class="mb-0">Gerenciar Cadastros</h2>
     </div>
 
-    <div class="management-section">
-        <h2>Status de Chamados</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th style="width: 100px;">Ação</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in status_list %}
-                <tr>
-                    <td>{{ s.nome }}</td>
-                    <td>
-                        <form action="{{ url_for('delete_status', status_id=s.id) }}" method="post" onsubmit="return confirm('Tem certeza?');">
-                            <button type="submit" class="delete-button-small">Remover</button>
+    <div class="row mt-4">
+        <div class="col-md-6 mb-4">
+            <div class="management-panel">
+                <h3><i class="fas fa-tags me-2"></i>Status dos Chamados</h3>
+                <hr>
+                <form action="{{ url_for('add_status') }}" method="post" class="add-form">
+                    <input type="text" name="nome" class="form-control" placeholder="Nome do novo status" required>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i></button>
+                </form>
+
+                <ul class="list-group mt-3">
+                    {% for status in status_list %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ status.nome }}
+                        <form action="{{ url_for('delete_status', status_id=status.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este status? A ação não pode ser desfeita.')">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <form action="{{ url_for('add_status') }}" method="post" class="add-form">
-            <input type="text" name="nome" placeholder="Nome do novo status" required>
-            <button type="submit">Adicionar</button>
-        </form>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item">Nenhum status cadastrado.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="management-panel">
+                <h3><i class="fas fa-wrench me-2"></i>Tipos de Problema</h3>
+                <hr>
+                <form action="{{ url_for('add_tipo_problema') }}" method="post" class="add-form">
+                    <input type="text" name="nome" class="form-control" placeholder="Nome do novo problema" required>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i></button>
+                </form>
+
+                <ul class="list-group mt-3">
+                    {% for tipo in tipos_problema_list %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ tipo.nome }}
+                        <form action="{{ url_for('delete_tipo_problema', tipo_id=tipo.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este tipo de problema? A ação não pode ser desfeita.')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item">Nenhum tipo de problema cadastrado.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .content-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 25px 30px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    .page-header {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 15px;
+        margin-bottom: 25px;
+    }
+    .page-header h2 {
+        margin: 0;
+        color: #333;
+    }
+    .management-panel {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        height: 100%;
+    }
+    .management-panel h3 {
+        font-size: 1.25rem;
+        color: #0056b3;
+    }
+    .add-form {
+        display: flex;
+        gap: 10px;
+    }
+    .add-form .form-control {
+        flex-grow: 1;
+    }
+    .btn-delete {
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        line-height: 1;
+    }
+</style>
 {% endblock %}

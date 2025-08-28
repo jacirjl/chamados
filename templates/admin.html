@@ -1,44 +1,32 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin - Gestão de Usuários</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 1em; }
-        .checkbox-group input { width: auto; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 id="topo-admin">Gestão de Usuários</h1>
+{% extends "layout.html" %}
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+{% block title %}Gerenciar Usuários{% endblock %}
 
-        <div style="margin-bottom: 2em; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-            <button type="button" id="btnNovoUsuario" class="button-link" style="background-color: #28a745;">Novo Usuário</button>
-            <form method="get" action="{{ url_for('admin_index') }}" style="display: flex; flex-grow: 1; gap: 10px;">
-                <input type="text" name="search" placeholder="Filtrar por nome, email ou município..." value="{{ search_query or '' }}" style="flex-grow: 1;">
-                <button type="submit">Filtrar</button>
-                <a href="{{ url_for('admin_index') }}" class="button-link" style="background-color: #6c757d;">Limpar</a>
+{% block content %}
+<div class="content-container">
+    <div class="page-header">
+        <h2 class="mb-0">Gerenciar Usuários</h2>
+        <div class="header-actions">
+            <form action="{{ url_for('admin_index') }}" method="get" class="search-form">
+                <input type="text" name="search" class="form-control" placeholder="Buscar por nome, e-mail..." value="{{ search_query or '' }}">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
             </form>
-            <a href="{{ url_for('index') }}" class="button-link" style="background-color: #17a2b8;">Voltar</a>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                <i class="fas fa-plus me-2"></i>Adicionar Usuário
+            </button>
         </div>
+    </div>
 
-        <h2>Usuários Cadastrados</h2>
-        <table>
-            <thead>
+    <div class="table-responsive mt-4">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Responsável</th>
-                    <th>Email</th>
+                    <th>E-mail</th>
                     <th>Município</th>
-                    <th>Ações</th>
+                    <th>Telefone</th>
+                    <th>Admin?</th>
+                    <th class="text-center">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -47,63 +35,123 @@
                     <td>{{ user.responsavel }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ user.municipio }}</td>
-                    <td>
-                        <a href="{{ url_for('edit_user', user_id=user.id) }}" class="button-link" style="background-color: #ffc107; color: black; margin-right: 5px;">Editar</a>
-                        <form action="{{ url_for('reset_password', user_id=user.id) }}" method="post" onsubmit="return confirm('Redefinir a senha deste usuário?');" style="display: inline;">
-                            <button type="submit">Redefinir Senha</button>
+                    <td>{{ user.telefone }}</td>
+                    <td>{% if user.is_admin %}Sim{% else %}Não{% endif %}</td>
+                    <td class="text-center action-buttons">
+                        <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="fas fa-edit"></i></a>
+                        
+                        <form action="{{ url_for('reset_password', user_id=user.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Redefinir Senha" onclick="return confirm('Tem certeza que deseja redefinir a senha deste usuário para o padrão?')"><i class="fas fa-key"></i></button>
                         </form>
-                        <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" onsubmit="return confirm('Remover este usuário?');" style="display: inline;">
-                            <button type="submit" style="background-color: #dc3545;">Remover</button>
+
+                        <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este usuário?')"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center;">Nenhum usuário encontrado com os critérios de busca.</td>
+                    <td colspan="6" class="text-center">Nenhum usuário encontrado.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-
-        <hr>
-        <h2 id="formAdicionarUsuario">Adicionar Novo Usuário</h2>
-        <form action="{{ url_for('add_user') }}" method="post">
-             <div class="form-group">
-                <input type="text" name="responsavel" placeholder="Nome do Responsável" required>
-            </div>
-            <div class="form-group">
-                <input type="email" name="email" placeholder="E-mail de Acesso" required>
-            </div>
-            <div class="form-group">
-                <input type="text" name="municipio" placeholder="Município" required>
-            </div>
-            <div class="form-group">
-                <input type="text" name="telefone" placeholder="Telefone" required>
-            </div>
-            <div class="checkbox-group">
-                <input type="checkbox" id="is_admin" name="is_admin">
-                <label for="is_admin">É Administrador?</label>
-            </div>
-            <div class="checkbox-group">
-                <input type="checkbox" id="must_reset_password" name="must_reset_password" checked>
-                <label for="must_reset_password">Forçar Redefinição de Senha no Próximo Login?</label>
-            </div>
-            <div style="margin-top: 1em;">
-                <button type="submit" style="background-color: #28a745;">Adicionar Usuário</button>
-                <a href="#topo-admin" class="button-link" style="background-color: #6c757d; margin-left: 10px;">Cancelar</a>
-            </div>
-        </form>
     </div>
+</div>
 
-    <script>
-        document.getElementById('btnNovoUsuario').addEventListener('click', function() {
-            const formSection = document.getElementById('formAdicionarUsuario');
-            formSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => {
-                document.querySelector('form[action="{{ url_for('add_user') }}"] input[name="responsavel"]').focus();
-            }, 500);
-        });
-    </script>
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUserModalLabel">Adicionar Novo Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('add_user') }}" method="post">
+                    <div class="mb-3">
+                        <label for="responsavel" class="form-label">Responsável</label>
+                        <input type="text" name="responsavel" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">E-mail</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="municipio" class="form-label">Município</label>
+                        <input type="text" name="municipio" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="telefone" class="form-label">Telefone</label>
+                        <input type="text" name="telefone" class="form-control" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="is_admin" class="form-check-input" id="isAdminCheck">
+                        <label class="form-check-label" for="isAdminCheck">É Administrador</label>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="must_reset_password" class="form-check-input" id="resetPasswordCheck" checked>
+                        <label class="form-check-label" for="resetPasswordCheck">Forçar Redefinição de Senha</label>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Usuário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-</body>
-</html>
+{% block scripts %}
+<style>
+    .content-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 25px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 15px;
+        margin-bottom: 15px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .header-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .search-form {
+        display: flex;
+    }
+    .search-form input {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    .search-form button {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+    .table {
+        font-size: 0.9rem;
+    }
+    .table thead th {
+        background-color: #f8f9fa;
+    }
+    .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+    }
+</style>
+{% endblock %}

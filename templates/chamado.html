@@ -34,37 +34,37 @@
                         <option value="{{ m }}" {% if m == municipio_selecionado %}selected{% endif %}>{{ m }}</option>
                     {% endfor %}
                 </select>
-                </div>
+            </div>
         </form>
     </div>
     {% endif %}
 
-    <form class="chamado-form" method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data">
+    <form class="chamado-form" method="post" action="{{ url_for('submit_chamado') }}" enctype="multipart/form-data" id="mainChamadoForm">
         {% if user.is_admin and municipio_selecionado %}
             <input type="hidden" name="municipio_selecionado" value="{{ municipio_selecionado }}">
         {% endif %}
 
+        <input type="hidden" name="selectedDevice" id="selectedDevice" required>
+
         <h2>Equipamentos</h2>
-        <p class="subtitle">Selecione o dispositivo com problema</p>
+        <p class="subtitle">Clique na linha do dispositivo com problema para selecioná-lo</p>
         <div class="table-container">
             {% if equipamentos %}
-                <table>
+                <table id="equipamentosTable">
                     <thead>
                         <tr>
-                            <th>Selecionar</th>
-                            <th>Patrimônio</th>
-                            <th>IMEI 1</th>
-                            <th>Marca</th>
-                            <th>Modelo</th>
-                            <th>Nº de Série</th>
-                            <th>Local de Uso</th>
-                            <th>Situação</th>
+                            <th style="width: 12%;">Patrimônio</th>
+                            <th style="width: 15%;">IMEI 1</th>
+                            <th style="width: 15%;">Marca</th>
+                            <th style="width: 15%;">Modelo</th>
+                            <th style="width: 15%;">Nº de Série</th>
+                            <th style="width: 18%;">Local de Uso</th>
+                            <th style="width: 10%;">Situação</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for equipamento in equipamentos %}
-                        <tr>
-                            <td><input type="radio" name="selectedDevice" value="{{ equipamento.imei1 }}" required></td>
+                        <tr class="clickable-row" data-imei="{{ equipamento.imei1 }}">
                             <td>{{ equipamento.patrimonio }}</td>
                             <td>{{ equipamento.imei1 }}</td>
                             <td>{{ equipamento.marca }}</td>
@@ -102,7 +102,7 @@
         </div>
 
         <div class="form-group">
-            <label for="foto">Anexar Foto (Opcional):</label>
+            <label for="foto">Anexar Foto (Opcional - Máx 5MB):</label>
             <input type="file" id="foto" name="foto" accept="image/png, image/jpeg">
         </div>
 
@@ -116,149 +116,84 @@
 {% block scripts %}
 <style>
     .form-container {
-        /* MUDANÇA: Formulário mais largo */
-        max-width: 1140px;
-        margin: 20px auto;
-        padding: 25px;
-        background-color: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        font-family: Arial, sans-serif;
+        max-width: 1140px; margin: 20px auto; padding: 25px; background-color: #ffffff;
+        border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); font-family: Arial, sans-serif;
     }
-    h1 {
-        text-align: center;
-        color: #333;
-        margin-bottom: 20px;
-    }
-    h2 {
-        color: #0056b3;
-        border-bottom: 2px solid #f0f0f0;
-        padding-bottom: 10px;
-        margin-top: 25px;
-    }
-    .subtitle {
-        color: #666;
-        margin-top: -5px;
-        margin-bottom: 15px;
-    }
-    .user-info {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    .info-item {
-        flex: 1;
-        min-width: 250px;
-    }
-    .info-item label, .form-group label, .municipio-selector label {
-        display: block;
-        font-weight: bold;
-        color: #555;
-        margin-bottom: 5px;
-    }
-    .info-item input {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background-color: #e9ecef;
-    }
-    .municipio-selector {
-        background-color: #eef7ff;
-        padding: 15px;
-        border: 1px solid #bce8f1;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    .input-group {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-    .input-group select {
-        flex-grow: 1;
-    }
-    .table-container {
-        overflow-x: auto;
-        /* MUDANÇA: Altura máxima e rolagem vertical */
-        max-height: 350px;
-        overflow-y: auto;
-        border: 1px solid #ddd;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 0;
-    }
+    h1 { text-align: center; color: #333; margin-bottom: 20px; }
+    h2 { color: #0056b3; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; margin-top: 25px; }
+    .subtitle { color: #666; margin-top: -5px; margin-bottom: 15px; }
+    .user-info { display: flex; flex-wrap: wrap; gap: 15px; background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .info-item { flex: 1; min-width: 250px; }
+    .info-item label, .form-group label, .municipio-selector label { display: block; font-weight: bold; color: #555; margin-bottom: 5px; }
+    .info-item input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background-color: #e9ecef; }
+    .municipio-selector { background-color: #eef7ff; padding: 15px; border: 1px solid #bce8f1; border-radius: 5px; margin-bottom: 20px; }
+    .input-group { display: flex; gap: 10px; align-items: center; }
+    .input-group select { flex-grow: 1; }
+    .table-container { overflow-x: auto; max-height: 350px; overflow-y: auto; border: 1px solid #ddd; }
+    table { width: 100%; border-collapse: collapse; margin: 0; }
     th, td {
-        border: 1px solid #ddd;
-        /* MUDANÇA: Linhas mais compactas */
-        padding: 8px;
-        text-align: left;
+        border: 1px solid #ddd; padding: 8px 10px; text-align: left;
         font-size: 0.85rem;
-        white-space: nowrap; /* Evita que o texto quebre a linha */
+        /* MUDANÇA: Removido o white-space:nowrap para permitir quebra de linha */
     }
-    th {
-        background-color: #f2f2f2;
-        font-weight: bold;
-        position: sticky; /* Cabeçalho fica fixo ao rolar */
-        top: 0;
+    th { background-color: #f2f2f2; font-weight: bold; position: sticky; top: 0; }
+    tbody tr:nth-child(even) { background-color: #f9f9f9; }
+    .info-message { padding: 1em; background-color: #f9f9f9; text-align: center; color: #777; }
+    .form-group { margin-bottom: 20px; }
+    select, textarea, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    .submit-group { text-align: right; margin-top: 30px; }
+    button { padding: 12px 25px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.3s ease; }
+    button:hover { background-color: #0056b3; }
+    button:disabled { background-color: #cccccc; cursor: not-allowed; }
+    hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }
+
+    /* MUDANÇA: Estilos para a linha clicável e selecionada */
+    .clickable-row {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
     }
-    tbody tr:nth-child(even) {
-        background-color: #f9f9f9;
-    }
-    tbody tr:hover {
+    .clickable-row:hover {
         background-color: #f1f1f1;
     }
-    td input[type="radio"] {
-        cursor: pointer;
-    }
-    .info-message {
-        padding: 1em;
-        background-color: #f9f9f9;
-        text-align: center;
-        color: #777;
-    }
-    .form-group {
-        margin-bottom: 20px;
-    }
-    select, textarea, input[type="file"] {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 1rem;
-    }
-    .submit-group {
-        text-align: right;
-        margin-top: 30px;
-    }
-    button {
-        padding: 12px 25px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        font-size: 1rem;
+    .clickable-row.selected {
+        background-color: #cfe2ff !important; /* Cor de seleção do Bootstrap */
         font-weight: bold;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-    button:hover {
-        background-color: #0056b3;
-    }
-    button:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-    hr {
-        border: none;
-        border-top: 1px solid #eee;
-        margin: 30px 0;
     }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabelaEquipamentos = document.getElementById('equipamentosTable');
+    const selectedDeviceInput = document.getElementById('selectedDevice');
+    const mainForm = document.getElementById('mainChamadoForm');
+
+    if (tabelaEquipamentos) {
+        const rows = tabelaEquipamentos.querySelectorAll('tbody tr.clickable-row');
+
+        rows.forEach(row => {
+            row.addEventListener('click', function() {
+                // Remove a seleção de outras linhas
+                rows.forEach(r => r.classList.remove('selected'));
+
+                // Adiciona a classe de seleção à linha clicada
+                this.classList.add('selected');
+
+                // Pega o IMEI do atributo 'data-imei' e atualiza o campo oculto
+                const imei = this.getAttribute('data-imei');
+                selectedDeviceInput.value = imei;
+            });
+        });
+    }
+
+    // Validação para garantir que um equipamento foi selecionado antes de enviar
+    if (mainForm) {
+        mainForm.addEventListener('submit', function(event) {
+            if (selectedDeviceInput.value === '') {
+                alert('Por favor, selecione um equipamento na tabela antes de registrar o chamado.');
+                event.preventDefault(); // Impede o envio do formulário
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

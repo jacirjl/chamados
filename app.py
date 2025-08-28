@@ -5,6 +5,7 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # --- Configuração da Aplicação ---
 app = Flask(__name__)
@@ -97,21 +98,23 @@ def abrir_chamado_admin():
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
 
     equipamentos = []
-    responsavel_nome = None
+    responsavel_do_municipio = None
+
     if municipio_selecionado:
         equipamentos = db.execute(
             'SELECT * FROM equipamentos WHERE municipio = ?',
             (municipio_selecionado,)
         ).fetchall()
-        responsavel_row = db.execute("SELECT responsavel FROM users WHERE municipio = ? AND is_admin = 0 LIMIT 1",
-                                     (municipio_selecionado,)).fetchone()
-        if responsavel_row:
-            responsavel_nome = responsavel_row['responsavel']
+        responsavel_do_municipio = db.execute("SELECT * FROM users WHERE municipio = ? AND is_admin = 0 LIMIT 1",
+                                              (municipio_selecionado,)).fetchone()
 
     db.close()
-    return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema,
-                           todos_municipios=todos_municipios, municipio_selecionado=municipio_selecionado,
-                           responsavel_nome=responsavel_nome)
+    return render_template('chamado.html',
+                           equipamentos=equipamentos,
+                           tipos_problema=tipos_problema,
+                           todos_municipios=todos_municipios,
+                           municipio_selecionado=municipio_selecionado,
+                           responsavel_do_municipio=responsavel_do_municipio)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -229,11 +232,15 @@ def submit_chamado():
 @login_required
 def meus_chamados():
     db = get_db()
-    status_options = db.execute('SELECT * FROM status ORDER BY id').fetchall()
+    status_options = db.execute('SELECT * FROM status ORDER BY nome').fetchall()
     tipos_problema_options = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
-    status_filter_id = request.args.get('status', None, type=int)
 
-    # MUDANÇA: Adicionado LEFT JOIN em equipamentos para pegar a marca e modelo
+    status_filter_id = request.args.get('status', default=None, type=int)
+    municipio_filter = request.args.get('municipio', default=None, type=str)
+    tipo_problema_filter_id = request.args.get('tipo_problema', default=None, type=int)
+
+    municipios_options = db.execute('SELECT DISTINCT municipio FROM chamados ORDER BY municipio').fetchall()
+
     base_query = """
         SELECT c.id, c.timestamp, c.municipio, c.solicitante_email, c.smartphone_imei, 
                c.observacoes, c.foto, c.solucao, c.status_id, c.tipo_problema_id, c.admin_responsavel_id,
@@ -241,7 +248,11 @@ def meus_chamados():
                tp.nome as tipo_problema_nome,
                u.responsavel as admin_responsavel_nome,
                e.marca as equipamento_marca,
-               e.modelo as equipamento_modelo
+               e.modelo as equipamento_modelo,
+               e.patrimonio as equipamento_patrimonio,
+               e.numeroDeSerie as equipamento_ns,
+               e.localdeUso as equipamento_local,
+               e.situacao as equipamento_situacao
         FROM chamados c
         JOIN status s ON c.status_id = s.id
         JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
@@ -249,17 +260,24 @@ def meus_chamados():
         LEFT JOIN equipamentos e ON c.smartphone_imei = e.imei1
     """
 
-    if g.user['is_admin']:
-        config_rows = db.execute("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'prazo_%'").fetchall()
-        configs = {row['chave']: int(row['valor']) for row in config_rows}
-        prazo_vermelho = configs.get('prazo_vermelho', 10)
-        prazo_amarelo = configs.get('prazo_amarelo', 5)
+    config_rows = db.execute("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'prazo_%'").fetchall()
+    configs = {row['chave']: int(row['valor']) for row in config_rows}
+    prazo_vermelho = configs.get('prazo_vermelho', 10)
+    prazo_amarelo = configs.get('prazo_amarelo', 5)
 
+    if g.user['is_admin']:
         params_atribuidos = [g.user['id']]
         query_atribuidos_conditions = " WHERE c.admin_responsavel_id = ?"
         if status_filter_id:
             query_atribuidos_conditions += " AND c.status_id = ?"
             params_atribuidos.append(status_filter_id)
+        if municipio_filter:
+            query_atribuidos_conditions += " AND c.municipio = ?"
+            params_atribuidos.append(municipio_filter)
+        if tipo_problema_filter_id:
+            query_atribuidos_conditions += " AND c.tipo_problema_id = ?"
+            params_atribuidos.append(tipo_problema_filter_id)
+
         query_atribuidos = base_query + query_atribuidos_conditions + " ORDER BY c.timestamp DESC"
         chamados_atribuidos_raw = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
 
@@ -269,7 +287,7 @@ def meus_chamados():
             chamado_dict['cor_borda'] = 'success'
             if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
                 try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
                     dias_aberto = (datetime.now() - data_abertura).days
                     if dias_aberto > prazo_vermelho:
                         chamado_dict['cor_borda'] = 'danger'
@@ -279,26 +297,35 @@ def meus_chamados():
                     chamado_dict['cor_borda'] = 'secondary'
             chamados_atribuidos_processados.append(chamado_dict)
 
-        query_outros = f"""
-            {base_query}
-            WHERE (c.admin_responsavel_id IS NULL OR c.admin_responsavel_id != ?)
-            AND s.nome NOT IN ('Finalizado', 'Cancelado')
-            ORDER BY c.timestamp DESC 
-        """
-        outros_chamados_raw = db.execute(query_outros, (g.user['id'],)).fetchall()
+        params_outros = [g.user['id']]
+        query_outros_conditions = " WHERE (c.admin_responsavel_id IS NULL OR c.admin_responsavel_id != ?)"
+        if status_filter_id:
+            query_outros_conditions += " AND c.status_id = ?"
+            params_outros.append(status_filter_id)
+        if municipio_filter:
+            query_outros_conditions += " AND c.municipio = ?"
+            params_outros.append(municipio_filter)
+        if tipo_problema_filter_id:
+            query_outros_conditions += " AND c.tipo_problema_id = ?"
+            params_outros.append(tipo_problema_filter_id)
+
+        query_outros = base_query + query_outros_conditions + " ORDER BY c.timestamp DESC"
+        outros_chamados_raw = db.execute(query_outros, tuple(params_outros)).fetchall()
+
         outros_chamados_processados = []
         for chamado in outros_chamados_raw:
             chamado_dict = dict(chamado)
             chamado_dict['cor_borda'] = 'success'
-            try:
-                data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                dias_aberto = (datetime.now() - data_abertura).days
-                if dias_aberto > prazo_vermelho:
-                    chamado_dict['cor_borda'] = 'danger'
-                elif dias_aberto > prazo_amarelo:
-                    chamado_dict['cor_borda'] = 'warning'
-            except (ValueError, TypeError):
-                chamado_dict['cor_borda'] = 'secondary'
+            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
+                try:
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
+                    dias_aberto = (datetime.now() - data_abertura).days
+                    if dias_aberto > prazo_vermelho:
+                        chamado_dict['cor_borda'] = 'danger'
+                    elif dias_aberto > prazo_amarelo:
+                        chamado_dict['cor_borda'] = 'warning'
+                except (ValueError, TypeError):
+                    chamado_dict['cor_borda'] = 'secondary'
             outros_chamados_processados.append(chamado_dict)
 
         db.close()
@@ -307,18 +334,49 @@ def meus_chamados():
                                outros_chamados=outros_chamados_processados,
                                status_options=status_options,
                                tipos_problema_options=tipos_problema_options,
-                               status_filter_id=status_filter_id)
+                               status_filter_id=status_filter_id,
+                               municipios_options=municipios_options,
+                               municipio_filter=municipio_filter)
     else:
         params = [g.user['email']]
         query_conditions = " WHERE c.solicitante_email = ?"
         if status_filter_id:
             query_conditions += " AND c.status_id = ?"
             params.append(status_filter_id)
+        if municipio_filter:
+            query_conditions += " AND c.municipio = ?"
+            params.append(municipio_filter)
+        if tipo_problema_filter_id:
+            query_conditions += " AND c.tipo_problema_id = ?"
+            params.append(tipo_problema_filter_id)
+
         query = base_query + query_conditions + " ORDER BY c.timestamp DESC"
-        todos_chamados = db.execute(query, tuple(params)).fetchall()
+        todos_chamados_raw = db.execute(query, tuple(params)).fetchall()
+
+        chamados_processados = []
+        for chamado in todos_chamados_raw:
+            chamado_dict = dict(chamado)
+            chamado_dict['cor_borda'] = 'success'
+            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
+                try:
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d')
+                    dias_aberto = (datetime.now() - data_abertura).days
+                    if dias_aberto > prazo_vermelho:
+                        chamado_dict['cor_borda'] = 'danger'
+                    elif dias_aberto > prazo_amarelo:
+                        chamado_dict['cor_borda'] = 'warning'
+                except (ValueError, TypeError):
+                    chamado_dict['cor_borda'] = 'secondary'
+            chamados_processados.append(chamado_dict)
+
         db.close()
-        return render_template('meus_chamados.html', chamados=todos_chamados, status_options=status_options,
-                               tipos_problema_options=tipos_problema_options, status_filter_id=status_filter_id)
+        return render_template('meus_chamados.html',
+                               chamados=chamados_processados,
+                               status_options=status_options,
+                               tipos_problema_options=tipos_problema_options,
+                               status_filter_id=status_filter_id,
+                               municipios_options=municipios_options,
+                               municipio_filter=municipio_filter)
 
 
 @app.route('/uploads/<path:filename>')
@@ -359,17 +417,8 @@ def update_chamado(chamado_id):
         db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
                    (novo_status_id, solucao_final, chamado_id))
     else:
-        status_atual_nome = db.execute("SELECT nome FROM status WHERE id = ?", (chamado_info['status_id'],)).fetchone()[
-            'nome']
-        if status_atual_nome != 'Aberto':
-            flash('Não é possível alterar um chamado que não está com o status "Aberto".', 'danger')
-            db.close()
-            return redirect(url_for('meus_chamados'))
-
-        novo_tipo_problema_id = request.form.get('tipo_problema')
-        novas_observacoes = request.form.get('observacoes')
-        db.execute('UPDATE chamados SET tipo_problema_id = ?, observacoes = ? WHERE id = ?',
-                   (novo_tipo_problema_id, novas_observacoes, chamado_id))
+        flash('Você não tem permissão para executar esta ação.', 'warning')
+        return redirect(url_for('meus_chamados'))
 
     db.commit()
     db.close()
@@ -382,6 +431,13 @@ def update_chamado(chamado_id):
 @admin_required
 def capturar_chamado(chamado_id):
     db = get_db()
+    chamado_atual = db.execute(
+        "SELECT status_id FROM chamados c JOIN status s ON c.status_id = s.id WHERE c.id = ? AND s.nome = 'Aberto'",
+        (chamado_id,)).fetchone()
+    if not chamado_atual:
+        flash('Este chamado não está mais aberto e não pode ser capturado.', 'danger')
+        return redirect(url_for('meus_chamados'))
+
     status_em_andamento = db.execute("SELECT id FROM status WHERE nome = 'Em Andamento'").fetchone()
     if not status_em_andamento:
         flash('Status "Em Andamento" não encontrado no sistema.', 'danger')
@@ -399,8 +455,6 @@ def capturar_chamado(chamado_id):
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-# (O restante das rotas permanece inalterado)
-
 @app.route('/dashboard')
 @login_required
 @admin_required
@@ -415,14 +469,21 @@ def dashboard():
         kpis[status_nome] = count
     kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
     kpis['Usuários'] = db.execute('SELECT COUNT(id) FROM users').fetchone()[0]
+
     status_data = db.execute(
-        'SELECT s.nome, COUNT(c.id) as count FROM chamados c JOIN status s ON c.status_id = s.id GROUP BY s.nome').fetchall()
+        'SELECT s.id, s.nome, COUNT(c.id) as count FROM chamados c JOIN status s ON c.status_id = s.id GROUP BY s.id, s.nome ORDER BY s.nome'
+    ).fetchall()
+    status_ids = [row['id'] for row in status_data]
     status_labels = [row['nome'] for row in status_data]
     status_values = [row['count'] for row in status_data]
+
     tipo_data = db.execute(
-        'SELECT tp.nome, COUNT(c.id) as count FROM chamados c JOIN tipos_problema tp ON c.tipo_problema_id = tp.id GROUP BY tp.nome ORDER BY count DESC').fetchall()
+        'SELECT tp.id, tp.nome, COUNT(c.id) as count FROM chamados c JOIN tipos_problema tp ON c.tipo_problema_id = tp.id GROUP BY tp.id, tp.nome ORDER BY count DESC'
+    ).fetchall()
+    tipo_ids = [row['id'] for row in tipo_data]
     tipo_labels = [row['nome'] for row in tipo_data]
     tipo_values = [row['count'] for row in tipo_data]
+
     ultimos_chamados = db.execute("""
         SELECT c.id, c.timestamp, c.solicitante_email, c.municipio, s.nome as status_nome, tp.nome as tipo_problema_nome
         FROM chamados c
@@ -431,10 +492,11 @@ def dashboard():
         ORDER BY c.timestamp DESC LIMIT 5
     """).fetchall()
     db.close()
+
     return render_template(
         'dashboard.html', kpis=kpis,
-        status_labels=status_labels, status_values=status_values,
-        tipo_labels=tipo_labels, tipo_values=tipo_values,
+        status_ids=status_ids, status_labels=status_labels, status_values=status_values,
+        tipo_ids=tipo_ids, tipo_labels=tipo_labels, tipo_values=tipo_values,
         ultimos_chamados=ultimos_chamados
     )
 
