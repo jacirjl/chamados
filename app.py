@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,12 +12,27 @@ app = Flask(__name__)
 app.secret_key = 'sua-chave-secreta-super-aleatoria'
 app.instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
 
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+
 DATABASE = os.path.join(app.instance_path, 'chamados.db')
 UPLOAD_FOLDER = os.path.join(app.instance_path, 'uploads')
 DEFAULT_PASSWORD = '12345'
 
 os.makedirs(app.instance_path, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_too_large_entity(e):
+    flash('O arquivo enviado é muito grande. O tamanho máximo permitido é de 5MB.', 'danger')
+
+    if g.user and g.user['is_admin']:
+        municipio = request.form.get('municipio_selecionado', '')
+        if municipio:
+            return redirect(url_for('abrir_chamado_admin', municipio=municipio))
+        return redirect(url_for('abrir_chamado_admin'))
+
+    return redirect(url_for('index'))
 
 
 # --- Funções de Banco de Dados ---
@@ -210,7 +225,7 @@ def submit_chamado():
         if foto_file.filename != '':
             _, extensao = os.path.splitext(foto_file.filename)
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
-            foto_filename = f"{timestamp}{extensao}"
+            foto_filename = secure_filename(f"{timestamp}{extensao}")
             foto_file.save(os.path.join(UPLOAD_FOLDER, foto_filename))
 
     status_aberto_row = db.execute('SELECT id FROM status WHERE nome = ?', ('Aberto',)).fetchone()
@@ -232,18 +247,44 @@ def submit_chamado():
 @login_required
 def meus_chamados():
     db = get_db()
+
+    config_rows = db.execute("SELECT chave, valor FROM configuracoes").fetchall()
+    configs = {row['chave']: int(row['valor']) for row in config_rows}
+    prazo_reabrir = configs.get('prazo_reabrir', 3)
+
+    status_ids = {
+        row['nome']: row['id'] for row in
+        db.execute("SELECT id, nome FROM status WHERE nome IN ('Resolvido', 'Encerrado')").fetchall()
+    }
+
+    if 'Resolvido' in status_ids and 'Encerrado' in status_ids:
+        db.execute("""
+            UPDATE chamados 
+            SET status_id = :id_encerrado
+            WHERE status_id = :id_resolvido 
+            AND resolvido_em IS NOT NULL
+            AND date(resolvido_em, '+' || :prazo || ' days') <= date('now')
+        """, {
+            "id_encerrado": status_ids['Encerrado'],
+            "id_resolvido": status_ids['Resolvido'],
+            "prazo": prazo_reabrir
+        })
+        db.commit()
+
     status_options = db.execute('SELECT * FROM status ORDER BY nome').fetchall()
     tipos_problema_options = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
 
     status_filter_id = request.args.get('status', default=None, type=int)
     municipio_filter = request.args.get('municipio', default=None, type=str)
     tipo_problema_filter_id = request.args.get('tipo_problema', default=None, type=int)
+    status_group_filter = request.args.get('status_group', default=None, type=str)
 
     municipios_options = db.execute('SELECT DISTINCT municipio FROM chamados ORDER BY municipio').fetchall()
 
     base_query = """
         SELECT c.id, c.timestamp, c.municipio, c.solicitante_email, c.smartphone_imei, 
                c.observacoes, c.foto, c.solucao, c.status_id, c.tipo_problema_id, c.admin_responsavel_id,
+               c.resolvido_em,
                s.nome as status_nome,
                tp.nome as tipo_problema_nome,
                u.responsavel as admin_responsavel_nome,
@@ -260,118 +301,94 @@ def meus_chamados():
         LEFT JOIN equipamentos e ON c.smartphone_imei = e.imei1
     """
 
-    config_rows = db.execute("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'prazo_%'").fetchall()
-    configs = {row['chave']: int(row['valor']) for row in config_rows}
     prazo_vermelho = configs.get('prazo_vermelho', 10)
     prazo_amarelo = configs.get('prazo_amarelo', 5)
 
+    def processar_chamados(chamados_raw):
+        chamados_processados = []
+        for chamado in chamados_raw:
+            chamado_dict = dict(chamado)
+
+            chamado_dict['cor_borda'] = 'success'
+            if chamado_dict['status_nome'] not in ['Encerrado', 'Resolvido', 'Cancelado']:
+                try:
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                    dias_aberto = (datetime.now() - data_abertura).days
+                    if dias_aberto > prazo_vermelho:
+                        chamado_dict['cor_borda'] = 'danger'
+                    elif dias_aberto > prazo_amarelo:
+                        chamado_dict['cor_borda'] = 'warning'
+                except (ValueError, TypeError):
+                    chamado_dict['cor_borda'] = 'secondary'
+
+            chamado_dict['reabertura_disponivel'] = False
+            if chamado_dict['status_nome'] == 'Resolvido' and chamado_dict['resolvido_em']:
+                try:
+                    data_resolvido = datetime.strptime(chamado_dict['resolvido_em'], '%Y-%m-%d %H:%M:%S.%f')
+                    data_expiracao = data_resolvido + timedelta(days=prazo_reabrir)
+                    if datetime.now() < data_expiracao:
+                        chamado_dict['reabertura_disponivel'] = True
+                        chamado_dict['expira_em'] = data_expiracao.strftime('%d/%m/%Y às %H:%M')
+                except (ValueError, TypeError):
+                    pass
+
+            chamados_processados.append(chamado_dict)
+        return chamados_processados
+
+    def get_query_conditions_and_params(base_params, base_conditions_str=""):
+        params = list(base_params)
+        conditions = base_conditions_str
+        if status_filter_id:
+            conditions += " AND c.status_id = ?"
+            params.append(status_filter_id)
+        if municipio_filter:
+            conditions += " AND c.municipio = ?"
+            params.append(municipio_filter)
+        if tipo_problema_filter_id:
+            conditions += " AND c.tipo_problema_id = ?"
+            params.append(tipo_problema_filter_id)
+        if status_group_filter == 'finalizados':
+            status_ids_finalizados = db.execute(
+                "SELECT id FROM status WHERE nome IN ('Resolvido', 'Encerrado')").fetchall()
+            ids_tuple = tuple([row['id'] for row in status_ids_finalizados])
+            if ids_tuple:
+                placeholders = ','.join('?' for _ in ids_tuple)
+                conditions += f" AND c.status_id IN ({placeholders})"
+                params.extend(ids_tuple)
+        return conditions, params
+
     if g.user['is_admin']:
-        params_atribuidos = [g.user['id']]
-        query_atribuidos_conditions = " WHERE c.admin_responsavel_id = ?"
-        if status_filter_id:
-            query_atribuidos_conditions += " AND c.status_id = ?"
-            params_atribuidos.append(status_filter_id)
-        if municipio_filter:
-            query_atribuidos_conditions += " AND c.municipio = ?"
-            params_atribuidos.append(municipio_filter)
-        if tipo_problema_filter_id:
-            query_atribuidos_conditions += " AND c.tipo_problema_id = ?"
-            params_atribuidos.append(tipo_problema_filter_id)
+        atribuidos_conditions, atribuidos_params = get_query_conditions_and_params(
+            (g.user['id'],), " WHERE c.admin_responsavel_id = ?"
+        )
+        query_atribuidos = base_query + atribuidos_conditions + " ORDER BY c.timestamp DESC"
+        chamados_atribuidos_raw = db.execute(query_atribuidos, atribuidos_params).fetchall()
 
-        query_atribuidos = base_query + query_atribuidos_conditions + " ORDER BY c.timestamp DESC"
-        chamados_atribuidos_raw = db.execute(query_atribuidos, tuple(params_atribuidos)).fetchall()
-
-        chamados_atribuidos_processados = []
-        for chamado in chamados_atribuidos_raw:
-            chamado_dict = dict(chamado)
-            chamado_dict['cor_borda'] = 'success'
-            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
-                try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                    dias_aberto = (datetime.now() - data_abertura).days
-                    if dias_aberto > prazo_vermelho:
-                        chamado_dict['cor_borda'] = 'danger'
-                    elif dias_aberto > prazo_amarelo:
-                        chamado_dict['cor_borda'] = 'warning'
-                except (ValueError, TypeError):
-                    chamado_dict['cor_borda'] = 'secondary'
-            chamados_atribuidos_processados.append(chamado_dict)
-
-        params_outros = [g.user['id']]
-        query_outros_conditions = " WHERE (c.admin_responsavel_id IS NULL OR c.admin_responsavel_id != ?)"
-        if status_filter_id:
-            query_outros_conditions += " AND c.status_id = ?"
-            params_outros.append(status_filter_id)
-        if municipio_filter:
-            query_outros_conditions += " AND c.municipio = ?"
-            params_outros.append(municipio_filter)
-        if tipo_problema_filter_id:
-            query_outros_conditions += " AND c.tipo_problema_id = ?"
-            params_outros.append(tipo_problema_filter_id)
-
-        query_outros = base_query + query_outros_conditions + " ORDER BY c.timestamp DESC"
-        outros_chamados_raw = db.execute(query_outros, tuple(params_outros)).fetchall()
-
-        outros_chamados_processados = []
-        for chamado in outros_chamados_raw:
-            chamado_dict = dict(chamado)
-            chamado_dict['cor_borda'] = 'success'
-            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
-                try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                    dias_aberto = (datetime.now() - data_abertura).days
-                    if dias_aberto > prazo_vermelho:
-                        chamado_dict['cor_borda'] = 'danger'
-                    elif dias_aberto > prazo_amarelo:
-                        chamado_dict['cor_borda'] = 'warning'
-                except (ValueError, TypeError):
-                    chamado_dict['cor_borda'] = 'secondary'
-            outros_chamados_processados.append(chamado_dict)
+        outros_conditions, outros_params = get_query_conditions_and_params(
+            (g.user['id'],), " WHERE (c.admin_responsavel_id IS NULL OR c.admin_responsavel_id != ?)"
+        )
+        query_outros = base_query + outros_conditions + " ORDER BY c.timestamp DESC"
+        outros_chamados_raw = db.execute(query_outros, outros_params).fetchall()
 
         db.close()
         return render_template('meus_chamados.html',
-                               chamados_atribuidos=chamados_atribuidos_processados,
-                               outros_chamados=outros_chamados_processados,
+                               chamados_atribuidos=processar_chamados(chamados_atribuidos_raw),
+                               outros_chamados=processar_chamados(outros_chamados_raw),
                                status_options=status_options,
                                tipos_problema_options=tipos_problema_options,
                                status_filter_id=status_filter_id,
                                municipios_options=municipios_options,
                                municipio_filter=municipio_filter)
     else:
-        params = [g.user['email']]
-        query_conditions = " WHERE c.solicitante_email = ?"
-        if status_filter_id:
-            query_conditions += " AND c.status_id = ?"
-            params.append(status_filter_id)
-        if municipio_filter:
-            query_conditions += " AND c.municipio = ?"
-            params.append(municipio_filter)
-        if tipo_problema_filter_id:
-            query_conditions += " AND c.tipo_problema_id = ?"
-            params.append(tipo_problema_filter_id)
-
-        query = base_query + query_conditions + " ORDER BY c.timestamp DESC"
-        todos_chamados_raw = db.execute(query, tuple(params)).fetchall()
-
-        chamados_processados = []
-        for chamado in todos_chamados_raw:
-            chamado_dict = dict(chamado)
-            chamado_dict['cor_borda'] = 'success'
-            if chamado_dict['status_nome'] not in ['Finalizado', 'Cancelado']:
-                try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                    dias_aberto = (datetime.now() - data_abertura).days
-                    if dias_aberto > prazo_vermelho:
-                        chamado_dict['cor_borda'] = 'danger'
-                    elif dias_aberto > prazo_amarelo:
-                        chamado_dict['cor_borda'] = 'warning'
-                except (ValueError, TypeError):
-                    chamado_dict['cor_borda'] = 'secondary'
-            chamados_processados.append(chamado_dict)
+        user_conditions, user_params = get_query_conditions_and_params(
+            (g.user['email'],), " WHERE c.solicitante_email = ?"
+        )
+        query = base_query + user_conditions + " ORDER BY c.timestamp DESC"
+        todos_chamados_raw = db.execute(query, user_params).fetchall()
 
         db.close()
         return render_template('meus_chamados.html',
-                               chamados=chamados_processados,
+                               chamados=processar_chamados(todos_chamados_raw),
                                status_options=status_options,
                                tipos_problema_options=tipos_problema_options,
                                status_filter_id=status_filter_id,
@@ -392,37 +409,83 @@ def update_chamado(chamado_id):
     chamado_info = db.execute("SELECT solicitante_email, status_id, solucao FROM chamados WHERE id = ?",
                               (chamado_id,)).fetchone()
 
-    if chamado_info is None:
-        flash('Chamado não encontrado.', 'danger')
-        db.close()
-        return redirect(url_for('meus_chamados'))
-
-    if not g.user['is_admin'] and chamado_info['solicitante_email'] != g.user['email']:
+    if not g.user['is_admin']:
         flash('Você não tem permissão para alterar este chamado.', 'danger')
         db.close()
         return redirect(url_for('meus_chamados'))
 
-    if g.user['is_admin']:
-        novo_status_id = request.form.get('status')
-        nova_adicao_solucao = request.form.get('nova_solucao', '').strip()
-        solucao_final = chamado_info['solucao'] or ''
+    novo_status_id = request.form.get('status')
+    nova_adicao_solucao = request.form.get('nova_solucao', '').strip()
+    solucao_final = chamado_info['solucao'] or ''
 
-        if nova_adicao_solucao:
-            timestamp_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-            autor = g.user['responsavel']
-            nova_entrada = f"[{timestamp_atual} - {autor}]:\n{nova_adicao_solucao}\n"
-            separador = "-" * 50 + "\n"
-            solucao_final = nova_entrada + separador + solucao_final
+    status_resolvido_info = db.execute("SELECT id FROM status WHERE nome = 'Resolvido'").fetchone()
 
-        db.execute('UPDATE chamados SET status_id = ?, solucao = ? WHERE id = ?',
-                   (novo_status_id, solucao_final, chamado_id))
-    else:
-        flash('Você não tem permissão para executar esta ação.', 'warning')
-        return redirect(url_for('meus_chamados'))
+    timestamp_resolvido = None
+    if status_resolvido_info and int(novo_status_id) == status_resolvido_info['id']:
+        timestamp_resolvido = datetime.now()
+
+    if nova_adicao_solucao:
+        timestamp_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+        autor = g.user['responsavel']
+        nova_entrada = f"[{timestamp_atual} - {autor}]:\n{nova_adicao_solucao}\n"
+        separador = "-" * 50 + "\n"
+        solucao_final = nova_entrada + separador + solucao_final
+
+    db.execute('UPDATE chamados SET status_id = ?, solucao = ?, resolvido_em = ? WHERE id = ?',
+               (novo_status_id, solucao_final, timestamp_resolvido, chamado_id))
 
     db.commit()
     db.close()
     flash(f'Chamado #{chamado_id} atualizado com sucesso!', 'success')
+    return redirect(url_for('meus_chamados'))
+
+
+@app.route('/chamado/reabrir/<int:chamado_id>', methods=['POST'])
+@login_required
+def reabrir_chamado(chamado_id):
+    db = get_db()
+    chamado = db.execute("SELECT * FROM chamados WHERE id = ?", (chamado_id,)).fetchone()
+
+    if not chamado or chamado['solicitante_email'] != g.user['email']:
+        flash("Você não tem permissão para reabrir este chamado.", "danger")
+        db.close()
+        return redirect(url_for('meus_chamados'))
+
+    prazo_reabrir = int(db.execute("SELECT valor FROM configuracoes WHERE chave = 'prazo_reabrir'").fetchone()['valor'])
+    status_resolvido_id = db.execute("SELECT id FROM status WHERE nome = 'Resolvido'").fetchone()['id']
+
+    if chamado['status_id'] != status_resolvido_id:
+        flash("Este chamado não pode ser reaberto, pois não está com o status 'Resolvido'.", "warning")
+        db.close()
+        return redirect(url_for('meus_chamados'))
+
+    data_resolvido = datetime.strptime(chamado['resolvido_em'], '%Y-%m-%d %H:%M:%S.%f')
+    data_expiracao = data_resolvido + timedelta(days=prazo_reabrir)
+
+    if datetime.now() > data_expiracao:
+        flash("O prazo para reabertura deste chamado já expirou.", "danger")
+        status_encerrado_id = db.execute("SELECT id FROM status WHERE nome = 'Encerrado'").fetchone()['id']
+        db.execute("UPDATE chamados SET status_id = ? WHERE id = ?", (status_encerrado_id, chamado_id))
+        db.commit()
+    else:
+        status_aberto_id = db.execute("SELECT id FROM status WHERE nome = 'Aberto'").fetchone()['id']
+
+        solucao_antiga = chamado['solucao'] or ''
+        timestamp_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+        autor = g.user['responsavel']
+        nova_entrada = f"[{timestamp_atual} - {autor} (SOLICITANTE)]:\nCHAMADO REABERTO PELO USUÁRIO.\n"
+        separador = "-" * 50 + "\n"
+        solucao_final = nova_entrada + separador + solucao_antiga
+
+        # MUDANÇA: Adicionado admin_responsavel_id = NULL para limpar o responsável anterior
+        db.execute(
+            "UPDATE chamados SET status_id = ?, resolvido_em = NULL, solucao = ?, admin_responsavel_id = NULL WHERE id = ?",
+            (status_aberto_id, solucao_final, chamado_id)
+        )
+        db.commit()
+        flash(f"Chamado #{chamado_id} foi reaberto com sucesso!", "success")
+
+    db.close()
     return redirect(url_for('meus_chamados'))
 
 
@@ -455,28 +518,50 @@ def capturar_chamado(chamado_id):
 
 
 # --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-# MUDANÇA: Rotas de admin restauradas
 @app.route('/dashboard')
 @login_required
 @admin_required
 def dashboard():
     db = get_db()
     kpis = {}
-    status_list = db.execute('SELECT nome FROM status ORDER BY id').fetchall()
-    for status in status_list:
-        status_nome = status['nome']
-        count = db.execute('SELECT COUNT(c.id) FROM chamados c JOIN status s ON c.status_id = s.id WHERE s.nome = ?',
-                           (status_nome,)).fetchone()[0]
-        kpis[status_nome] = count
-    kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
-    kpis['Usuários'] = db.execute('SELECT COUNT(id) FROM users').fetchone()[0]
 
-    status_data = db.execute(
-        'SELECT s.id, s.nome, COUNT(c.id) as count FROM chamados c JOIN status s ON c.status_id = s.id GROUP BY s.id, s.nome ORDER BY s.nome'
+    all_status_counts = db.execute(
+        'SELECT s.nome, COUNT(c.id) as count FROM status s LEFT JOIN chamados c ON s.id = c.status_id GROUP BY s.id, s.nome'
     ).fetchall()
-    status_ids = [row['id'] for row in status_data]
-    status_labels = [row['nome'] for row in status_data]
-    status_values = [row['count'] for row in status_data]
+
+    counts_dict = {row['nome']: row['count'] for row in all_status_counts}
+
+    kpis['Aberto'] = counts_dict.get('Aberto', 0)
+    kpis['Em Andamento'] = counts_dict.get('Em Andamento', 0)
+    kpis['Finalizado'] = counts_dict.get('Resolvido', 0) + counts_dict.get('Encerrado', 0)
+    kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
+
+    status_data_query = """
+        SELECT
+            CASE
+                WHEN subquery.nome IN ('Resolvido', 'Encerrado') THEN 'finalizados'
+                ELSE subquery.id
+            END as status_id_agrupado,
+            CASE
+                WHEN subquery.nome IN ('Resolvido', 'Encerrado') THEN 'Finalizados'
+                ELSE subquery.nome
+            END as status_nome_agrupado,
+            SUM(subquery.count) as total_count
+        FROM (
+            SELECT s.id, s.nome, COUNT(c.id) as count
+            FROM status s
+            LEFT JOIN chamados c ON s.id = c.status_id
+            GROUP BY s.id, s.nome
+        ) as subquery
+        WHERE subquery.count > 0
+        GROUP BY status_id_agrupado, status_nome_agrupado
+        ORDER BY status_nome_agrupado;
+    """
+    status_data = db.execute(status_data_query).fetchall()
+
+    status_ids = [row['status_id_agrupado'] for row in status_data]
+    status_labels = [row['status_nome_agrupado'] for row in status_data]
+    status_values = [row['total_count'] for row in status_data]
 
     tipo_data = db.execute(
         'SELECT tp.id, tp.nome, COUNT(c.id) as count FROM chamados c JOIN tipos_problema tp ON c.tipo_problema_id = tp.id GROUP BY tp.id, tp.nome ORDER BY count DESC'
@@ -618,14 +703,19 @@ def gerenciar_configuracoes():
     if request.method == 'POST':
         prazo_vermelho = request.form.get('prazo_vermelho')
         prazo_amarelo = request.form.get('prazo_amarelo')
+        prazo_reabrir = request.form.get('prazo_reabrir')
 
-        if not prazo_vermelho or not prazo_amarelo or not prazo_vermelho.isdigit() or not prazo_amarelo.isdigit():
+        if not all(p and p.isdigit() for p in [prazo_vermelho, prazo_amarelo, prazo_reabrir]):
             flash('Os prazos devem ser números inteiros positivos.', 'danger')
         elif int(prazo_vermelho) <= int(prazo_amarelo):
             flash('O prazo para a cor vermelha deve ser maior que o prazo para a cor amarela.', 'danger')
         else:
-            db.execute("UPDATE configuracoes SET valor = ? WHERE chave = 'prazo_vermelho'", (prazo_vermelho,))
-            db.execute("UPDATE configuracoes SET valor = ? WHERE chave = 'prazo_amarelo'", (prazo_amarelo,))
+            db.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
+                       ('prazo_vermelho', prazo_vermelho))
+            db.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
+                       ('prazo_amarelo', prazo_amarelo))
+            db.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
+                       ('prazo_reabrir', prazo_reabrir))
             db.commit()
             flash('Configurações de prazo salvas com sucesso!', 'success')
 

@@ -134,7 +134,6 @@
     th, td {
         border: 1px solid #ddd; padding: 8px 10px; text-align: left;
         font-size: 0.85rem;
-        /* MUDANÇA: Removido o white-space:nowrap para permitir quebra de linha */
     }
     th { background-color: #f2f2f2; font-weight: bold; position: sticky; top: 0; }
     tbody tr:nth-child(even) { background-color: #f9f9f9; }
@@ -146,8 +145,6 @@
     button:hover { background-color: #0056b3; }
     button:disabled { background-color: #cccccc; cursor: not-allowed; }
     hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }
-
-    /* MUDANÇA: Estilos para a linha clicável e selecionada */
     .clickable-row {
         cursor: pointer;
         transition: background-color 0.2s ease;
@@ -156,7 +153,7 @@
         background-color: #f1f1f1;
     }
     .clickable-row.selected {
-        background-color: #cfe2ff !important; /* Cor de seleção do Bootstrap */
+        background-color: #cfe2ff !important;
         font-weight: bold;
     }
 </style>
@@ -167,30 +164,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedDeviceInput = document.getElementById('selectedDevice');
     const mainForm = document.getElementById('mainChamadoForm');
 
+    // MUDANÇA: Validação de tamanho do arquivo no Frontend
+    const fotoInput = document.getElementById('foto');
+    fotoInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const maxSize = 5 * 1024 * 1024; // 5MB em bytes
+            if (file.size > maxSize) {
+                alert('O arquivo selecionado é muito grande! O tamanho máximo permitido é 5MB.');
+                // Limpa o campo de arquivo para impedir o envio
+                event.target.value = '';
+            }
+        }
+    });
+
     if (tabelaEquipamentos) {
         const rows = tabelaEquipamentos.querySelectorAll('tbody tr.clickable-row');
 
         rows.forEach(row => {
             row.addEventListener('click', function() {
-                // Remove a seleção de outras linhas
                 rows.forEach(r => r.classList.remove('selected'));
-
-                // Adiciona a classe de seleção à linha clicada
                 this.classList.add('selected');
-
-                // Pega o IMEI do atributo 'data-imei' e atualiza o campo oculto
                 const imei = this.getAttribute('data-imei');
                 selectedDeviceInput.value = imei;
             });
         });
     }
 
-    // Validação para garantir que um equipamento foi selecionado antes de enviar
     if (mainForm) {
         mainForm.addEventListener('submit', function(event) {
             if (selectedDeviceInput.value === '') {
                 alert('Por favor, selecione um equipamento na tabela antes de registrar o chamado.');
-                event.preventDefault(); // Impede o envio do formulário
+                event.preventDefault();
             }
         });
     }

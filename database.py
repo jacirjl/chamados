@@ -21,7 +21,6 @@ print("Conectado ao banco de dados.")
 def setup_tables():
     """Cria as tabelas com a nova estrutura."""
 
-    # ... (o resto da função setup_tables permanece o mesmo) ...
     # --- NOVAS TABELAS ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS status (
@@ -83,6 +82,7 @@ def setup_tables():
         foto TEXT,
         solucao TEXT,
         admin_responsavel_id INTEGER,
+        resolvido_em DATETIME,
         FOREIGN KEY (tipo_problema_id) REFERENCES tipos_problema (id),
         FOREIGN KEY (status_id) REFERENCES status (id),
         FOREIGN KEY (admin_responsavel_id) REFERENCES users (id)
@@ -94,13 +94,15 @@ def setup_tables():
 
 
 def populate_lookup_tables():
-    # ... (esta função permanece a mesma) ...
     """Popula as novas tabelas com valores padrão."""
-    default_status = ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Finalizado', 'Cancelado']
+    # MUDANÇA: Adicionado 'Resolvido' e trocado 'Finalizado' por 'Encerrado'
+    default_status = ['Aberto', 'Em Andamento', 'Aguardando Solução', 'Resolvido', 'Encerrado', 'Cancelado']
     default_problemas = ['Octostudio', 'Sistema Operacional', 'Hardware/Dispositivo', 'Dúvidas/Outros']
+    # MUDANÇA: Adicionada a configuração para o prazo de reabertura
     default_config = [
         ('prazo_vermelho', '10'),
-        ('prazo_amarelo', '5')
+        ('prazo_amarelo', '5'),
+        ('prazo_reabrir', '3')
     ]
 
     try:
@@ -114,7 +116,6 @@ def populate_lookup_tables():
 
 
 def populate_users():
-    # ... (esta função permanece a mesma) ...
     """Lê a aba 'Cadastro' e insere/atualiza usuários."""
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='Cadastro')
@@ -140,36 +141,23 @@ def populate_equipamentos():
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='equipamentos')
 
-        # Normaliza os nomes das colunas da planilha (tudo minúsculo, sem espaços extras)
         df.columns = [str(col).lower().strip() for col in df.columns]
 
-        # Mapeia os nomes das colunas da planilha para os nomes das colunas do banco de dados
-        # MUDANÇA: Adicionadas variações de nomes para maior flexibilidade
         column_map = {
-            'município': 'municipio',
-            'imei 1': 'imei1',
-            'imei 2': 'imei2',
-            'marca': 'marca',
-            'modelo': 'modelo',
-            'capacidade': 'capacidade',
-            'numero de serie': 'numeroDeSerie',  # Com espaço
-            'numerodeserie': 'numeroDeSerie',  # Sem espaço
-            'data da entrega': 'dataEntrega',  # Com espaço
-            'dataentrega': 'dataEntrega',  # Sem espaço
-            'local de uso': 'localdeUso',  # Com espaço
-            'localdeuso': 'localdeUso',  # Sem espaço
-            'situação': 'situacao',
-            'patrimonio': 'patrimonio'
+            'município': 'municipio', 'imei 1': 'imei1', 'imei 2': 'imei2',
+            'marca': 'marca', 'modelo': 'modelo', 'capacidade': 'capacidade',
+            'numero de serie': 'numeroDeSerie', 'numerodeserie': 'numeroDeSerie',
+            'data da entrega': 'dataEntrega', 'dataentrega': 'dataEntrega',
+            'local de uso': 'localdeUso', 'localdeuso': 'localdeUso',
+            'situação': 'situacao', 'patrimonio': 'patrimonio'
         }
         df.rename(columns=column_map, inplace=True)
 
-        # Define quais colunas do BD o script deve tentar preencher
         expected_cols = [
             'municipio', 'imei1', 'imei2', 'marca', 'modelo', 'capacidade',
             'numeroDeSerie', 'dataEntrega', 'localdeUso', 'situacao', 'patrimonio'
         ]
 
-        # Cria um novo DataFrame apenas com as colunas que existem e que serão inseridas no BD
         df_cols_to_insert = {col: df[col] for col in expected_cols if col in df.columns}
         df_to_insert = pd.DataFrame(df_cols_to_insert)
 

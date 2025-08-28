@@ -44,6 +44,7 @@
             <div class="kpi-card card-finalizado">
                 <div class="card-body">
                     <i class="fas fa-check-circle kpi-icon"></i>
+                    {# MUDANÇA: Agora usa a chave 'Finalizado' que é a soma de Resolvido+Encerrado #}
                     <div class="kpi-value">{{ kpis.get('Finalizado', 0) }}</div>
                     <div class="kpi-label">Finalizados</div>
                 </div>
@@ -116,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     dateSpan.textContent = today.toLocaleDateString('pt-BR', options);
 
-    // MUDANÇA: Captura os IDs para usar no clique
+    // MUDANÇA: Captura os IDs, que agora podem ser números ou a string 'finalizados'
     const statusIds = {{ status_ids|tojson|safe }};
     const tipoProblemaIds = {{ tipo_ids|tojson|safe }};
 
@@ -144,12 +145,15 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: { position: 'top' }
             },
-            // MUDANÇA: Adiciona o evento de clique
+            // MUDANÇA: Adiciona lógica para tratar o clique no grupo 'finalizados'
             onClick: (evt, elements) => {
                 if (elements.length > 0) {
                     const clickedIndex = elements[0].index;
                     const statusId = statusIds[clickedIndex];
-                    if (statusId) {
+
+                    if (statusId === 'finalizados') {
+                        window.location.href = `{{ url_for('meus_chamados') }}?status_group=finalizados`;
+                    } else if (statusId) {
                         window.location.href = `{{ url_for('meus_chamados') }}?status=${statusId}`;
                     }
                 }
@@ -182,7 +186,6 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: { display: false }
             },
-            // MUDANÇA: Adiciona o evento de clique
             onClick: (evt, elements) => {
                 if (elements.length > 0) {
                     const clickedIndex = elements[0].index;
@@ -234,9 +237,9 @@ document.addEventListener('DOMContentLoaded', function() {
     .kpi-value { font-size: 2.2rem; font-weight: 700; }
     .kpi-label { font-size: 0.9rem; text-transform: uppercase; }
     .card-total { background: linear-gradient(45deg, #4e73df, #224abe); }
-    .card-aberto { background: linear-gradient(45deg, #1cc88a, #13855c); }
-    .card-andamento { background: linear-gradient(45deg, #f6c23e, #dda20a); }
-    .card-finalizado { background: linear-gradient(45deg, #36b9cc, #2a96a5); }
+    .card-aberto { background: linear-gradient(45deg, #f6c23e, #dda20a); }
+    .card-andamento { background: linear-gradient(45deg, #36b9cc, #2a96a5); }
+    .card-finalizado { background: linear-gradient(45deg, #1cc88a, #13855c); }
     .chart-container, .recent-activity-container {
         background-color: #ffffff;
         padding: 20px;

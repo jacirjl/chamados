@@ -52,14 +52,14 @@
                 </thead>
                 <tbody>
                     {% for chamado in chamados_atribuidos %}
-                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Finalizado', 'Cancelado'] else 'secondary' }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp.split(' ')[0] }}</td>
                         <td>{{ chamado.municipio }}</td>
                         <td>{{ chamado.solicitante_email }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
-                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Finalizado', 'Cancelado'] %}bg-secondary{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
@@ -103,7 +103,7 @@
                                         </div>
                                     </div>
 
-                                    {% if chamado.status_nome not in ['Finalizado', 'Cancelado'] %}
+                                    {% if chamado.status_nome not in ['Encerrado', 'Cancelado'] %}
                                     <hr>
                                     <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
                                         <div class="row">
@@ -162,7 +162,7 @@
                 </thead>
                 <tbody>
                     {% for chamado in outros_chamados %}
-                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_nome in ['Finalizado', 'Cancelado'] else chamado.cor_borda }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_nome in ['Encerrado', 'Resolvido', 'Cancelado'] else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp.split(' ')[0] }}</td>
                         <td>{{ chamado.municipio }}</td>
@@ -175,7 +175,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Finalizado', 'Cancelado'] %}bg-secondary{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
@@ -259,12 +259,12 @@
                 </thead>
                 <tbody>
                     {% for chamado in chamados %}
-                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Finalizado', 'Cancelado'] else 'secondary' }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp.split(' ')[0] }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
-                             <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Finalizado', 'Cancelado'] %}bg-secondary{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
@@ -276,8 +276,17 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
+                            {% if chamado.reabertura_disponivel %}
+                            <form action="{{ url_for('reabrir_chamado', chamado_id=chamado.id) }}" method="POST" class="d-inline-block mb-1">
+                                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Tem certeza que deseja reabrir este chamado?')">
+                                    <i class="fas fa-history me-1"></i> Reabrir
+                                </button>
+                            </form>
+                            <div class="form-text" style="font-size: 0.75rem;">Expira em: {{ chamado.expira_em }}</div>
+                            {% endif %}
+
                             <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#user-detalhes-{{ chamado.id }}" title="Ver Detalhes">
-                                <i class="fas fa-eye"></i>
+                                <i class="fas fa-eye"></i> Detalhes
                             </button>
                         </td>
                     </tr>
@@ -376,7 +385,6 @@
     }
     textarea[readonly] { white-space: pre-wrap; }
 
-    /* MUDANÇA: Estilos para a seção de detalhes do equipamento e foto */
     .details-panel .equipment-details {
         background-color: #f3f5f8;
         border: 1px solid #d0d6e0;
