@@ -54,7 +54,7 @@
                     {% for chamado in chamados_atribuidos %}
                     <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
                         <td>{{ chamado.id }}</td>
-                        <td>{{ chamado.timestamp.split(' ')[0] }}</td>
+                        <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.municipio }}</td>
                         <td>{{ chamado.solicitante_email }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
@@ -80,15 +80,15 @@
                                                 <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
                                             </div>
                                             <div class="equipment-details">
-                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
-                                                <ul>
-                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
-                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
-                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
-                                                    <li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li>
-                                                    <li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li>
-                                                    <li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li>
-                                                </ul>
+                                                <label class="form-label fw-bold d-block mb-2">Detalhes do Equipamento:</label>
+                                                <div class="row">
+                                                    <div class="col-md-6"><li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li></div>
+                                                </div>
                                             </div>
                                         </div>
                                         <div class="col-lg-4">
@@ -109,13 +109,15 @@
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label for="solucao-hist-{{ chamado.id }}" class="form-label fw-bold">Histórico de Soluções:</label>
-                                                <textarea readonly class="form-control bg-white" id="solucao-hist-{{ chamado.id }}" rows="5">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
+                                                <textarea readonly class="form-control bg-white" id="solucao-hist-{{ chamado.id }}" rows="8">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="nova-solucao-{{ chamado.id }}" class="form-label fw-bold">Adicionar Nova Solução:</label>
-                                                <textarea name="nova_solucao" id="nova-solucao-{{ chamado.id }}" class="form-control" rows="5" placeholder="Digite a nova atualização aqui..."></textarea>
+                                                <textarea name="nova_solucao" id="nova-solucao-{{ chamado.id }}" class="form-control" rows="8" placeholder="Digite a nova atualização aqui..."></textarea>
                                             </div>
-                                            <div class="col-12 mb-3">
+                                        </div>
+                                        <div class="row align-items-end">
+                                            <div class="col-md-6">
                                                 <label for="status-{{ chamado.id }}" class="form-label fw-bold">Alterar Status:</label>
                                                 <select name="status" id="status-{{ chamado.id }}" class="form-select" style="max-width: 300px;">
                                                     {% for status in status_options %}
@@ -123,13 +125,15 @@
                                                     {% endfor %}
                                                 </select>
                                             </div>
+                                            <div class="col-md-6 text-end">
+                                                <button type="submit" class="btn btn-success mt-3">Salvar Alterações</button>
+                                            </div>
                                         </div>
-                                        <button type="submit" class="btn btn-success">Salvar Alterações</button>
                                     </form>
                                     {% else %}
                                     <hr>
                                     <label class="form-label fw-bold">Histórico Final de Soluções:</label>
-                                    <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhuma solução registrada.' }}</textarea>
+                                    <textarea readonly class="form-control bg-white" rows="10">{{ chamado.solucao or 'Nenhuma solução registrada.' }}</textarea>
                                     {% endif %}
                                 </div>
                             </div>
@@ -164,7 +168,7 @@
                     {% for chamado in outros_chamados %}
                     <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_nome in ['Encerrado', 'Resolvido', 'Cancelado'] else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
-                        <td>{{ chamado.timestamp.split(' ')[0] }}</td>
+                        <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.municipio }}</td>
                         <td>{{ chamado.solicitante_email }}</td>
                         <td>
@@ -203,15 +207,15 @@
                                                 <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
                                             </div>
                                             <div class="equipment-details">
-                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
-                                                <ul>
-                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
-                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
-                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
-                                                    <li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li>
-                                                    <li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li>
-                                                    <li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li>
-                                                </ul>
+                                                <label class="form-label fw-bold d-block mb-2">Detalhes do Equipamento:</label>
+                                                <div class="row">
+                                                    <div class="col-md-6"><li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Patrimônio:</strong> {{ chamado.equipamento_patrimonio or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Local de Uso:</strong> {{ chamado.equipamento_local or 'N/A' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Situação do Equip.:</strong> {{ chamado.equipamento_situacao or 'N/A' }}</li></div>
+                                                </div>
                                             </div>
                                         </div>
                                         <div class="col-lg-4">
@@ -227,7 +231,7 @@
                                     </div>
                                     <hr>
                                     <label class="form-label fw-bold">Histórico de Soluções:</label>
-                                    <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
+                                    <textarea readonly class="form-control bg-white" rows="10">{{ chamado.solucao or 'Nenhum histórico de solução.' }}</textarea>
                                 </div>
                             </div>
                         </td>
@@ -261,7 +265,7 @@
                     {% for chamado in chamados %}
                     <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
                         <td>{{ chamado.id }}</td>
-                        <td>{{ chamado.timestamp.split(' ')[0] }}</td>
+                        <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
                             <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
@@ -295,21 +299,21 @@
                             <div class="collapse" id="user-detalhes-{{ chamado.id }}">
                                 <div class="details-panel">
                                     <div class="row">
-                                        <div class="col-lg-8">
+                                        <div class="col-lg-7">
+                                            <div class="equipment-details mb-3">
+                                                <label class="form-label fw-bold d-block mb-2">Detalhes do Equipamento:</label>
+                                                <div class="row">
+                                                    <div class="col-md-6"><li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li></div>
+                                                    <div class="col-md-6"><li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li></div>
+                                                    <div class="col-md-6"><li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li></div>
+                                                </div>
+                                            </div>
                                             <div class="mb-3">
                                                 <label class="form-label fw-bold">Observações (enviado por você):</label>
                                                 <textarea readonly class="form-control" rows="4">{{ chamado.observacoes }}</textarea>
                                             </div>
-                                            <div class="equipment-details">
-                                                <label class="form-label fw-bold">Detalhes do Equipamento:</label>
-                                                 <ul>
-                                                    <li><strong>Marca/Modelo:</strong> {{ chamado.equipamento_marca or 'N/A' }} {{ chamado.equipamento_modelo or '' }}</li>
-                                                    <li><strong>IMEI:</strong> {{ chamado.smartphone_imei }}</li>
-                                                    <li><strong>Nº de Série:</strong> {{ chamado.equipamento_ns or 'N/A' }}</li>
-                                                </ul>
-                                            </div>
                                         </div>
-                                        <div class="col-lg-4">
+                                        <div class="col-lg-5">
                                             {% if chamado.foto %}
                                             <div class="mb-3">
                                                 <label class="form-label fw-bold">Foto Anexada:</label><br>
@@ -322,7 +326,7 @@
                                     </div>
                                     <hr>
                                     <label class="form-label fw-bold">Histórico de Soluções:</label>
-                                    <textarea readonly class="form-control bg-white" rows="5">{{ chamado.solucao or 'Nenhuma solução informada ainda.' }}</textarea>
+                                    <textarea readonly class="form-control bg-white" rows="8">{{ chamado.solucao or 'Nenhuma solução informada ainda.' }}</textarea>
                                 </div>
                             </div>
                         </td>
@@ -392,7 +396,7 @@
         padding: 15px;
         font-size: 0.9rem;
     }
-    .details-panel .equipment-details ul {
+    .details-panel .equipment-details ul, .details-panel .equipment-details li {
         list-style-type: none;
         padding-left: 0;
         margin-bottom: 0;
@@ -402,8 +406,9 @@
     }
     .details-panel .img-thumbnail {
         width: 100%;
-        max-width: 250px;
-        height: auto;
+        max-width: 250px; /* Mantém a largura máxima original */
+        max-height: 200px; /* Nova altura máxima para a imagem */
+        object-fit: contain; /* Garante que a imagem se ajuste sem cortar ou distorcer */
         border: 3px solid #fff;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }

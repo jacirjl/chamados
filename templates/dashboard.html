@@ -12,9 +12,10 @@
         </div>
     </div>
 
+    {# MUDANÇA: O layout agora tem 5 cards. A classe de coluna foi ajustada para melhor responsividade. #}
     <div class="row">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="kpi-card card-total">
+        <div class="col-lg col-md-6 mb-4">
+            <div class="kpi-card card-total h-100">
                 <div class="card-body">
                     <i class="fas fa-ticket-alt kpi-icon"></i>
                     <div class="kpi-value">{{ kpis.get('Total', 0) }}</div>
@@ -22,8 +23,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="kpi-card card-aberto">
+        <div class="col-lg col-md-6 mb-4">
+            <div class="kpi-card card-aberto h-100">
                 <div class="card-body">
                     <i class="fas fa-folder-open kpi-icon"></i>
                     <div class="kpi-value">{{ kpis.get('Aberto', 0) }}</div>
@@ -31,8 +32,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="kpi-card card-andamento">
+        <div class="col-lg col-md-6 mb-4">
+            <div class="kpi-card card-andamento h-100">
                 <div class="card-body">
                     <i class="fas fa-cogs kpi-icon"></i>
                     <div class="kpi-value">{{ kpis.get('Em Andamento', 0) }}</div>
@@ -40,13 +41,22 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="kpi-card card-finalizado">
+        <div class="col-lg col-md-6 mb-4">
+            <div class="kpi-card card-finalizado h-100">
                 <div class="card-body">
                     <i class="fas fa-check-circle kpi-icon"></i>
-                    {# MUDANÇA: Agora usa a chave 'Finalizado' que é a soma de Resolvido+Encerrado #}
                     <div class="kpi-value">{{ kpis.get('Finalizado', 0) }}</div>
                     <div class="kpi-label">Finalizados</div>
+                </div>
+            </div>
+        </div>
+        {# MUDANÇA: Adicionado o novo card 'Outros' #}
+        <div class="col-lg col-md-6 mb-4">
+            <div class="kpi-card card-outros h-100">
+                <div class="card-body">
+                    <i class="fas fa-info-circle kpi-icon"></i>
+                    <div class="kpi-value">{{ kpis.get('Outros', 0) }}</div>
+                    <div class="kpi-label">Outros</div>
                 </div>
             </div>
         </div>
@@ -87,7 +97,8 @@
                             {% for chamado in ultimos_chamados %}
                             <tr>
                                 <td>{{ chamado.id }}</td>
-                                <td>{{ chamado.timestamp.split(' ')[0] }}</td>
+                                {# MUDANÇA: A data agora vem formatada do backend, não precisa mais de filtros #}
+                                <td>{{ chamado.timestamp }}</td>
                                 <td>{{ chamado.solicitante_email }}</td>
                                 <td>{{ chamado.municipio }}</td>
                                 <td><span class="badge rounded-pill bg-primary">{{ chamado.status_nome }}</span></td>
@@ -117,16 +128,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     dateSpan.textContent = today.toLocaleDateString('pt-BR', options);
 
-    // MUDANÇA: Captura os IDs, que agora podem ser números ou a string 'finalizados'
     const statusIds = {{ status_ids|tojson|safe }};
     const tipoProblemaIds = {{ tipo_ids|tojson|safe }};
 
-    // Função para alterar o cursor do mouse
     function changeCursor(event, chartElement) {
         event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
     }
 
-    // Gráfico de Pizza (Status)
     const statusCtx = document.getElementById('statusChart').getContext('2d');
     new Chart(statusCtx, {
         type: 'doughnut',
@@ -145,7 +153,6 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: { position: 'top' }
             },
-            // MUDANÇA: Adiciona lógica para tratar o clique no grupo 'finalizados'
             onClick: (evt, elements) => {
                 if (elements.length > 0) {
                     const clickedIndex = elements[0].index;
@@ -162,7 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Gráfico de Barras (Tipos de Problema)
     const tipoCtx = document.getElementById('tipoProblemaChart').getContext('2d');
     new Chart(tipoCtx, {
         type: 'bar',
@@ -240,6 +246,8 @@ document.addEventListener('DOMContentLoaded', function() {
     .card-aberto { background: linear-gradient(45deg, #f6c23e, #dda20a); }
     .card-andamento { background: linear-gradient(45deg, #36b9cc, #2a96a5); }
     .card-finalizado { background: linear-gradient(45deg, #1cc88a, #13855c); }
+    /* MUDANÇA: Estilo para o novo card 'Outros' */
+    .card-outros { background: linear-gradient(45deg, #6c757d, #5a6268); }
     .chart-container, .recent-activity-container {
         background-color: #ffffff;
         padding: 20px;

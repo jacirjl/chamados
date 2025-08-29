@@ -309,10 +309,18 @@ def meus_chamados():
         for chamado in chamados_raw:
             chamado_dict = dict(chamado)
 
+            # MUDANÇA: Formatando a data de abertura aqui
+            try:
+                data_obj = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                chamado_dict['timestamp'] = data_obj.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                chamado_dict['timestamp'] = 'Data inválida'  # Fallback
+
             chamado_dict['cor_borda'] = 'success'
             if chamado_dict['status_nome'] not in ['Encerrado', 'Resolvido', 'Cancelado']:
                 try:
-                    data_abertura = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                    data_abertura = datetime.strptime(chamado_dict['timestamp'],
+                                                      '%d/%m/%Y')  # Agora usa o formato brasileiro
                     dias_aberto = (datetime.now() - data_abertura).days
                     if dias_aberto > prazo_vermelho:
                         chamado_dict['cor_borda'] = 'danger'
@@ -477,7 +485,6 @@ def reabrir_chamado(chamado_id):
         separador = "-" * 50 + "\n"
         solucao_final = nova_entrada + separador + solucao_antiga
 
-        # MUDANÇA: Adicionado admin_responsavel_id = NULL para limpar o responsável anterior
         db.execute(
             "UPDATE chamados SET status_id = ?, resolvido_em = NULL, solucao = ?, admin_responsavel_id = NULL WHERE id = ?",
             (status_aberto_id, solucao_final, chamado_id)
@@ -531,10 +538,11 @@ def dashboard():
 
     counts_dict = {row['nome']: row['count'] for row in all_status_counts}
 
+    kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
     kpis['Aberto'] = counts_dict.get('Aberto', 0)
     kpis['Em Andamento'] = counts_dict.get('Em Andamento', 0)
     kpis['Finalizado'] = counts_dict.get('Resolvido', 0) + counts_dict.get('Encerrado', 0)
-    kpis['Total'] = db.execute('SELECT COUNT(id) FROM chamados').fetchone()[0]
+    kpis['Outros'] = kpis['Total'] - (kpis['Aberto'] + kpis['Em Andamento'] + kpis['Finalizado'])
 
     status_data_query = """
         SELECT
@@ -570,20 +578,28 @@ def dashboard():
     tipo_labels = [row['nome'] for row in tipo_data]
     tipo_values = [row['count'] for row in tipo_data]
 
-    ultimos_chamados = db.execute("""
+    ultimos_chamados_raw = db.execute("""
         SELECT c.id, c.timestamp, c.solicitante_email, c.municipio, s.nome as status_nome, tp.nome as tipo_problema_nome
         FROM chamados c
         JOIN status s ON c.status_id = s.id
         JOIN tipos_problema tp ON c.tipo_problema_id = tp.id
         ORDER BY c.timestamp DESC LIMIT 5
     """).fetchall()
+
+    ultimos_chamados_formatados = []
+    for chamado in ultimos_chamados_raw:
+        chamado_dict = dict(chamado)
+        data_obj = datetime.strptime(chamado_dict['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+        chamado_dict['timestamp'] = data_obj.strftime('%d/%m/%Y')
+        ultimos_chamados_formatados.append(chamado_dict)
+
     db.close()
 
     return render_template(
         'dashboard.html', kpis=kpis,
         status_ids=status_ids, status_labels=status_labels, status_values=status_values,
         tipo_ids=tipo_ids, tipo_labels=tipo_labels, tipo_values=tipo_values,
-        ultimos_chamados=ultimos_chamados
+        ultimos_chamados=ultimos_chamados_formatados
     )
 
 
