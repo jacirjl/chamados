@@ -10,7 +10,6 @@
 </head>
 <body>
 
-{# --- INÍCIO DA SEÇÃO DO MENU MODIFICADO --- #}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container-fluid">
         <a class="navbar-brand" href="{{ url_for('index') }}">
@@ -21,17 +20,16 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-            {# A lista da esquerda (me-auto) foi removida pois as ações principais foram para a direita #}
             <ul class="navbar-nav ms-auto align-items-center">
                 {% if user %}
-                    {# Bloco de botões de Ação Principal #}
                     <li class="nav-item me-2">
                         {% if user.is_admin %}
                             <a class="btn btn-primary btn-sm" href="{{ url_for('abrir_chamado_admin') }}">
                                 <i class="fas fa-plus-circle me-1"></i>Abrir Chamado
                             </a>
                         {% else %}
-                            <a class="btn btn-primary btn-sm" href="{{ url_for('index') }}">
+                            {# MUDANÇA: O link agora aponta para a nova rota dedicada #}
+                            <a class="btn btn-primary btn-sm" href="{{ url_for('abrir_chamado') }}">
                                 <i class="fas fa-plus-circle me-1"></i>Abrir Chamado
                             </a>
                         {% endif %}
@@ -42,7 +40,6 @@
                         </a>
                     </li>
 
-                    {# Menu Admin Dropdown #}
                     {% if user.is_admin %}
                     <li class="nav-item dropdown me-3">
                         <a class="nav-link dropdown-toggle" href="#" id="adminMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -58,7 +55,6 @@
                     </li>
                     {% endif %}
 
-                    {# Informações do Usuário e Logout #}
                     <li class="nav-item">
                         <span class="navbar-text me-3">
                             Olá, {{ user.responsavel.split()[0] }}!
@@ -70,7 +66,6 @@
                         </a>
                     </li>
                 {% else %}
-                    {# Botão de Entrar para visitantes #}
                     <li class="nav-item">
                          <a href="{{ url_for('login') }}" class="btn btn-outline-success btn-sm">
                             <i class="fas fa-sign-in-alt"></i> Entrar
@@ -81,7 +76,6 @@
         </div>
     </div>
 </nav>
-{# --- FIM DA SEÇÃO DO MENU MODIFICADO --- #}
 
 <main class="container-fluid">
     <div class="main-content">

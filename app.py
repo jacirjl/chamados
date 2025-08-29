@@ -82,14 +82,45 @@ def inject_user():
     return dict(user=g.user)
 
 
-# --- Rotas da Aplicação Principal ---
+# --- ROTAS PRINCIPAIS MODIFICADAS ---
 @app.route('/')
 @login_required
 def index():
     if g.user['must_reset_password']:
         return redirect(url_for('redefinir_senha'))
+
+    # Se for admin, redireciona para o dashboard de admin
     if g.user['is_admin']:
         return redirect(url_for('dashboard'))
+
+    # MUDANÇA: Se for usuário comum, mostra o novo dashboard de usuário
+    db = get_db()
+    # Busca KPIs para o usuário
+    kpis = {}
+    query_kpis = """
+        SELECT s.nome, count(c.id) as count 
+        FROM chamados c JOIN status s ON c.status_id = s.id 
+        WHERE c.solicitante_email = ? 
+        GROUP BY s.nome
+    """
+    user_stats = db.execute(query_kpis, (g.user['email'],)).fetchall()
+    stats_dict = {row['nome']: row['count'] for row in user_stats}
+
+    kpis['abertos'] = stats_dict.get('Aberto', 0) + stats_dict.get('Em Andamento', 0) + stats_dict.get(
+        'Aguardando Peça', 0)
+    kpis['finalizados'] = stats_dict.get('Resolvido', 0) + stats_dict.get('Encerrado', 0)
+
+    db.close()
+    return render_template('user_dashboard.html', kpis=kpis)
+
+
+# MUDANÇA: Nova rota dedicada para o formulário de abrir chamado
+@app.route('/abrir_chamado')
+@login_required
+def abrir_chamado():
+    # Impede admin de acessar esta rota simples
+    if g.user['is_admin']:
+        return redirect(url_for('abrir_chamado_admin'))
 
     db = get_db()
     equipamentos = db.execute(
@@ -98,7 +129,6 @@ def index():
     ).fetchall()
     tipos_problema = db.execute('SELECT * FROM tipos_problema ORDER BY nome').fetchall()
     db.close()
-
     return render_template('chamado.html', equipamentos=equipamentos, tipos_problema=tipos_problema)
 
 
@@ -160,6 +190,8 @@ def login():
 
     return render_template('login.html')
 
+
+# ... (o restante do arquivo app.py permanece o mesmo) ...
 
 @app.route('/logout')
 def logout():
