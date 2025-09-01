@@ -9,104 +9,145 @@
     </div>
 
     <div class="row mt-4">
-        <div class="col-md-6 mb-4">
+        <div class="col-lg-8 mb-4">
             <div class="management-panel">
                 <h3><i class="fas fa-tags me-2"></i>Status dos Chamados</h3>
+                <p class="text-muted">Defina os status e seus comportamentos no sistema. Apenas um status pode ser "inicial".</p>
                 <hr>
+                <form action="{{ url_for('update_status') }}" method="post">
+                    <div class="table-responsive">
+                        <table class="table table-borderless" style="min-width: 700px;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nome do Status</th>
+                                    <th class="text-center">É Inicial?</th>
+                                    <th class="text-center">É "Em Atendimento"?</th>
+                                    <th class="text-center">Permite Reabertura?</th>
+                                    <th class="text-center">É Final? (Bloqueia)</th>
+                                    <th class="text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for status in status_list %}
+                                <tr>
+                                    <td>
+                                        <input type="text" name="nome_{{ status.id }}" class="form-control" value="{{ status.nome }}" required>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <input class="form-check-input" type="radio" name="e_inicial" value="{{ status.id }}" {% if status.e_inicial %}checked{% endif %}>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <input class="form-check-input" type="checkbox" name="e_em_atendimento_{{ status.id }}" {% if status.e_em_atendimento %}checked{% endif %}>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <input class="form-check-input" type="checkbox" name="permite_reabertura_{{ status.id }}" {% if status.permite_reabertura %}checked{% endif %}>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <input class="form-check-input" type="checkbox" name="e_final_{{ status.id }}" {% if status.e_final %}checked{% endif %}>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <a href="#" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" data-bs-toggle="modal" data-bs-target="#deleteStatusModal-{{ status.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save me-2"></i>Salvar Alterações nos Status</button>
+                </form>
+                <hr>
+
+                <h4>Adicionar Novo Status</h4>
                 <form action="{{ url_for('add_status') }}" method="post" class="add-form">
                     <input type="text" name="nome" class="form-control" placeholder="Nome do novo status" required>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i></button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-plus"></i> Adicionar</button>
                 </form>
-
-                <ul class="list-group mt-3">
-                    {% for status in status_list %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ status.nome }}
-                        <form action="{{ url_for('delete_status', status_id=status.id) }}" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este status? A ação não pode ser desfeita.')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item">Nenhum status cadastrado.</li>
-                    {% endfor %}
-                </ul>
             </div>
         </div>
 
-        <div class="col-md-6 mb-4">
+        <div class="col-lg-4 mb-4">
             <div class="management-panel">
                 <h3><i class="fas fa-wrench me-2"></i>Tipos de Problema</h3>
                 <hr>
+                <form action="{{ url_for('update_tipos_problema') }}" method="post">
+                    <ul class="list-group">
+                        {% for tipo in tipos_problema_list %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <input type="text" name="nome_{{ tipo.id }}" class="form-control me-2" value="{{ tipo.nome }}" required>
+                            <a href="#" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" data-bs-toggle="modal" data-bs-target="#deleteTipoModal-{{ tipo.id }}">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">Nenhum tipo de problema cadastrado.</li>
+                        {% endfor %}
+                    </ul>
+                    <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save me-2"></i>Salvar Alterações nos Tipos</button>
+                </form>
+                <hr>
                 <form action="{{ url_for('add_tipo_problema') }}" method="post" class="add-form">
                     <input type="text" name="nome" class="form-control" placeholder="Nome do novo problema" required>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i></button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-plus"></i></button>
                 </form>
-
-                <ul class="list-group mt-3">
-                    {% for tipo in tipos_problema_list %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ tipo.nome }}
-                        <form action="{{ url_for('delete_tipo_problema', tipo_id=tipo.id) }}" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-danger btn-delete" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este tipo de problema? A ação não pode ser desfeita.')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item">Nenhum tipo de problema cadastrado.</li>
-                    {% endfor %}
-                </ul>
             </div>
         </div>
     </div>
 </div>
+
+{% for status in status_list %}
+<div class="modal fade" id="deleteStatusModal-{{ status.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirmar Exclusão</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Tem certeza que deseja excluir o status "<strong>{{ status.nome }}</strong>"?</p>
+        <p class="text-danger">Atenção: Esta ação não pode ser desfeita e só funcionará se o status não estiver em uso por chamados ou configurações de fluxo.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form action="{{ url_for('delete_status', status_id=status.id) }}" method="post" class="d-inline">
+            <button type="submit" class="btn btn-danger">Excluir</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% for tipo in tipos_problema_list %}
+<div class="modal fade" id="deleteTipoModal-{{ tipo.id }}" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Confirmar Exclusão</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Tem certeza que deseja excluir o tipo de problema "<strong>{{ tipo.nome }}</strong>"?</p>
+          <p class="text-danger">Atenção: Esta ação não pode ser desfeita e só funcionará se o tipo não estiver em uso.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <form action="{{ url_for('delete_tipo_problema', tipo_id=tipo.id) }}" method="post" class="d-inline">
+              <button type="submit" class="btn btn-danger">Excluir</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+
 {% endblock %}
 
 {% block scripts %}
 <style>
-    .content-container {
-        max-width: 1200px;
-        margin: 20px auto;
-        padding: 25px 30px;
-        background-color: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    }
-    .page-header {
-        border-bottom: 1px solid #dee2e6;
-        padding-bottom: 15px;
-        margin-bottom: 25px;
-    }
-    .page-header h2 {
-        margin: 0;
-        color: #333;
-    }
-    .management-panel {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 20px;
-        height: 100%;
-    }
-    .management-panel h3 {
-        font-size: 1.25rem;
-        color: #0056b3;
-    }
-    .add-form {
-        display: flex;
-        gap: 10px;
-    }
-    .add-form .form-control {
-        flex-grow: 1;
-    }
-    .btn-delete {
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        line-height: 1;
-    }
+/* ... (estilos existentes) ... */
+.management-panel table .form-control, .management-panel .list-group-item .form-control { font-size: 0.9rem; }
+.management-panel table .form-check-input { transform: scale(1.2); }
 </style>
 {% endblock %}

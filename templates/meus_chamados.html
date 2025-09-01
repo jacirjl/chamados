@@ -52,14 +52,14 @@
                 </thead>
                 <tbody>
                     {% for chamado in chamados_atribuidos %}
-                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_e_final else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.municipio }}</td>
                         <td>{{ chamado.solicitante_email }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
-                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_e_final and not chamado.status_permite_reabertura %}bg-secondary{% elif chamado.status_permite_reabertura %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
@@ -103,7 +103,7 @@
                                         </div>
                                     </div>
 
-                                    {% if chamado.status_nome not in ['Encerrado', 'Cancelado'] %}
+                                    {% if not chamado.status_e_final %}
                                     <hr>
                                     <form action="{{ url_for('update_chamado', chamado_id=chamado.id) }}" method="post">
                                         <div class="row">
@@ -156,21 +156,23 @@
                 <thead>
                     <tr>
                         <th scope="col" style="width: 5%;">#</th>
-                        <th scope="col" style="width: 15%;">Data Abertura</th>
+                        <th scope="col" style="width: 10%;">Data</th>
                         <th scope="col" style="width: 15%;">Município</th>
-                        <th scope="col" style="width: 20%;">Solicitante</th>
-                        <th scope="col" style="width: 20%;">Responsável</th>
+                        <th scope="col" style="width: 15%;">Solicitante</th>
+                        <th scope="col" style="width: 15%;">Problema</th>
+                        <th scope="col" style="width: 15%;">Responsável</th>
                         <th scope="col" style="width: 15%;">Status</th>
                         <th scope="col" style="width: 10%;" class="text-center">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for chamado in outros_chamados %}
-                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_nome in ['Encerrado', 'Resolvido', 'Cancelado'] else chamado.cor_borda }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_e_final else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.municipio }}</td>
                         <td>{{ chamado.solicitante_email }}</td>
+                        <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
                             {% if chamado.admin_responsavel_nome %}
                                 {{ chamado.admin_responsavel_nome }}
@@ -179,12 +181,12 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_e_final and not chamado.status_permite_reabertura %}bg-secondary{% elif chamado.status_permite_reabertura %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
                         <td class="text-center">
-                            {% if not chamado.admin_responsavel_id and chamado.status_nome == 'Aberto' %}
+                            {% if not chamado.admin_responsavel_id and chamado.status_e_inicial %}
                             <form action="{{ url_for('capturar_chamado', chamado_id=chamado.id) }}" method="POST" class="d-inline">
                                 <button type="submit" class="btn btn-sm btn-success" title="Capturar Chamado">
                                     <i class="fas fa-hand-paper"></i>
@@ -197,7 +199,7 @@
                         </td>
                     </tr>
                     <tr>
-                        <td colspan="7" class="p-0 border-0">
+                        <td colspan="8" class="p-0 border-0">
                             <div class="collapse" id="geral-detalhes-{{ chamado.id }}">
                                 <div class="details-panel">
                                     <div class="row">
@@ -263,12 +265,12 @@
                 </thead>
                 <tbody>
                     {% for chamado in chamados %}
-                    <tr style="border-left: 5px solid var(--bs-{{ chamado.cor_borda if chamado.status_nome not in ['Encerrado', 'Resolvido', 'Cancelado'] else 'secondary' }});">
+                    <tr style="border-left: 5px solid var(--bs-{{ 'secondary' if chamado.status_e_final else chamado.cor_borda }});">
                         <td>{{ chamado.id }}</td>
                         <td>{{ chamado.timestamp }}</td>
                         <td>{{ chamado.tipo_problema_nome }}</td>
                         <td>
-                            <span class="badge fs-6 w-100 {% if chamado.status_nome in ['Encerrado', 'Cancelado'] %}bg-secondary{% elif chamado.status_nome == 'Resolvido' %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
+                            <span class="badge fs-6 w-100 {% if chamado.status_e_final and not chamado.status_permite_reabertura %}bg-secondary{% elif chamado.status_permite_reabertura %}bg-success{% else %}bg-{{ chamado.cor_borda }}{% endif %}">
                                 {{ chamado.status_nome }}
                             </span>
                         </td>
@@ -406,11 +408,39 @@
     }
     .details-panel .img-thumbnail {
         width: 100%;
-        max-width: 250px; /* Mantém a largura máxima original */
-        max-height: 200px; /* Nova altura máxima para a imagem */
-        object-fit: contain; /* Garante que a imagem se ajuste sem cortar ou distorcer */
+        max-width: 250px;
+        max-height: 200px;
+        object-fit: contain;
         border: 3px solid #fff;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    .textarea-erro {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
+    }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const erroChamadoId = {{ erro_chamado_id|default('null') }};
+
+    if (erroChamadoId) {
+        const detalheComErro = document.getElementById(`detalhes-${erroChamadoId}`);
+        const textAreaComErro = document.getElementById(`nova-solucao-${erroChamadoId}`);
+
+        if (detalheComErro && textAreaComErro) {
+            const collapseInstance = new bootstrap.Collapse(detalheComErro, {
+                toggle: false
+            });
+            collapseInstance.show();
+
+            textAreaComErro.classList.add('textarea-erro');
+
+            textAreaComErro.focus();
+
+            textAreaComErro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+});
+</script>
 {% endblock %}

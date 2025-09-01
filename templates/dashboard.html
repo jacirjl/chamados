@@ -12,7 +12,6 @@
         </div>
     </div>
 
-    {# MUDANÇA: O layout agora tem 5 cards. A classe de coluna foi ajustada para melhor responsividade. #}
     <div class="row">
         <div class="col-lg col-md-6 mb-4">
             <div class="kpi-card card-total h-100">
@@ -32,15 +31,17 @@
                 </div>
             </div>
         </div>
+
         <div class="col-lg col-md-6 mb-4">
             <div class="kpi-card card-andamento h-100">
                 <div class="card-body">
                     <i class="fas fa-cogs kpi-icon"></i>
-                    <div class="kpi-value">{{ kpis.get('Em Andamento', 0) }}</div>
-                    <div class="kpi-label">Em Andamento</div>
+                    <div class="kpi-value">{{ kpis.get('Em Atendimento', 0) }}</div>
+                    <div class="kpi-label">Em Atendimento</div>
                 </div>
             </div>
         </div>
+
         <div class="col-lg col-md-6 mb-4">
             <div class="kpi-card card-finalizado h-100">
                 <div class="card-body">
@@ -50,7 +51,6 @@
                 </div>
             </div>
         </div>
-        {# MUDANÇA: Adicionado o novo card 'Outros' #}
         <div class="col-lg col-md-6 mb-4">
             <div class="kpi-card card-outros h-100">
                 <div class="card-body">
@@ -97,7 +97,6 @@
                             {% for chamado in ultimos_chamados %}
                             <tr>
                                 <td>{{ chamado.id }}</td>
-                                {# MUDANÇA: A data agora vem formatada do backend, não precisa mais de filtros #}
                                 <td>{{ chamado.timestamp }}</td>
                                 <td>{{ chamado.solicitante_email }}</td>
                                 <td>{{ chamado.municipio }}</td>
@@ -122,7 +121,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Lógica para data atual no cabeçalho
     const dateSpan = document.getElementById('current-date-span');
     const today = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -246,7 +244,6 @@ document.addEventListener('DOMContentLoaded', function() {
     .card-aberto { background: linear-gradient(45deg, #f6c23e, #dda20a); }
     .card-andamento { background: linear-gradient(45deg, #36b9cc, #2a96a5); }
     .card-finalizado { background: linear-gradient(45deg, #1cc88a, #13855c); }
-    /* MUDANÇA: Estilo para o novo card 'Outros' */
     .card-outros { background: linear-gradient(45deg, #6c757d, #5a6268); }
     .chart-container, .recent-activity-container {
         background-color: #ffffff;

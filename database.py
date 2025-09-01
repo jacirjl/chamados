@@ -21,14 +21,19 @@ print("Conectado ao banco de dados.")
 def setup_tables():
     """Cria as tabelas com a nova estrutura."""
 
-    # --- NOVAS TABELAS ---
+    # MUDANÇA: Adicionadas colunas de comportamento na tabela STATUS
+    cursor.execute('DROP TABLE IF EXISTS status')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT UNIQUE NOT NULL
+        nome TEXT UNIQUE NOT NULL,
+        e_inicial BOOLEAN DEFAULT 0 NOT NULL,
+        e_em_atendimento BOOLEAN DEFAULT 0 NOT NULL,
+        permite_reabertura BOOLEAN DEFAULT 0 NOT NULL,
+        e_final BOOLEAN DEFAULT 0 NOT NULL
     );
     ''')
-    print("Tabela 'status' criada/verificada.")
+    print("Tabela 'status' recriada com colunas de comportamento.")
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS tipos_problema (
@@ -38,7 +43,6 @@ def setup_tables():
     ''')
     print("Tabela 'tipos_problema' criada/verificada.")
 
-    # --- TABELA DE CONFIGURAÇÕES (NOVA) ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS configuracoes (
         chave TEXT PRIMARY KEY,
@@ -47,7 +51,6 @@ def setup_tables():
     ''')
     print("Tabela 'configuracoes' criada/verificada.")
 
-    # --- TABELAS ANTIGAS ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
@@ -67,7 +70,6 @@ def setup_tables():
     ''')
     print("Tabela 'equipamentos' criada/verificada.")
 
-    # --- TABELA CHAMADOS ATUALIZADA ---
     cursor.execute('DROP TABLE IF EXISTS chamados')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS chamados (
@@ -94,25 +96,41 @@ def setup_tables():
 
 
 def populate_lookup_tables():
-    """Popula as novas tabelas com valores padrão."""
-    # MUDANÇA: Adicionado 'Resolvido' e trocado 'Finalizado' por 'Encerrado'
-    default_status = ['Aberto', 'Em Andamento', 'Aguardando Solução', 'Resolvido', 'Encerrado', 'Cancelado']
+    """Popula as novas tabelas com valores e comportamentos padrão."""
+    # MUDANÇA: Inserção dos comportamentos padrão para cada status
+    default_status = [
+        # nome, e_inicial, e_em_atendimento, permite_reabertura, e_final
+        ('Aberto', 1, 0, 0, 0),
+        ('Em Andamento', 0, 1, 0, 0),
+        ('Aguardando Peça', 0, 0, 0, 0),
+        ('Resolvido', 0, 0, 1, 1),
+        ('Encerrado', 0, 0, 0, 1),
+        ('Cancelado', 0, 0, 0, 1)
+    ]
     default_problemas = ['Octostudio', 'Sistema Operacional', 'Hardware/Dispositivo', 'Dúvidas/Outros']
-    # MUDANÇA: Adicionada a configuração para o prazo de reabertura
+
+    # MUDANÇA: Adicionadas configurações de fluxo de trabalho
     default_config = [
         ('prazo_vermelho', '10'),
         ('prazo_amarelo', '5'),
-        ('prazo_reabrir', '3')
+        ('prazo_reabrir', '3'),
+        ('status_capturado_id', '2'),  # ID de "Em Andamento"
+        ('status_expirado_id', '5')  # ID de "Encerrado"
     ]
 
     try:
-        cursor.executemany("INSERT OR IGNORE INTO status (nome) VALUES (?)", [(s,) for s in default_status])
+        cursor.executemany(
+            "INSERT OR IGNORE INTO status (nome, e_inicial, e_em_atendimento, permite_reabertura, e_final) VALUES (?, ?, ?, ?, ?)",
+            default_status)
         cursor.executemany("INSERT OR IGNORE INTO tipos_problema (nome) VALUES (?)", [(p,) for p in default_problemas])
         cursor.executemany("INSERT OR IGNORE INTO configuracoes (chave, valor) VALUES (?, ?)", default_config)
         conn.commit()
-        print("Tabelas 'status', 'tipos_problema' e 'configuracoes' populadas com valores padrão.")
+        print("Tabelas 'status', 'tipos_problema' e 'configuracoes' populadas com valores e comportamentos padrão.")
     except Exception as e:
         print(f"Erro ao popular tabelas de lookup: {e}")
+
+
+# ... O resto do arquivo (populate_users, populate_equipamentos, etc.) permanece o mesmo ...
 
 
 def populate_users():
